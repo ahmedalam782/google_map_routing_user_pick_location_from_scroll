@@ -80,7 +80,7 @@ class MapScreen extends StatelessWidget {
           log('selectedLocation Place: ${val.selectedLocation}');
           log('pointName Place: ${val.pointName}');
         },
-        internal: true,
+        internal: false,
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -103,6 +104,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       ),
     );
   }
+  
 
   LatLng? selectedLocation;
   String? locationName;
@@ -114,7 +116,12 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       latLng.latitude,
       latLng.longitude,
     ).then((value) {
-      var pm = value[2];
+      Placemark pm;
+      if (Platform.isIOS) {
+        pm = value[0];
+      } else {
+        pm = value[2];
+      }
       bool same = pm.subAdministrativeArea == pm.subLocality;
       final parts = [
         pm.administrativeArea?.split(' ')[0],

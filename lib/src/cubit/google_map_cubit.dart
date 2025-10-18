@@ -60,10 +60,9 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         locationData.longitude!,
       );
 
-      currentLocation = startLocation ??
-          LatLng(locationData.latitude!, locationData.longitude!);
+      currentLocation = LatLng(locationData.latitude!, locationData.longitude!);
       var myCameraPosition = (!internal && !isStart)
-          ? CameraPosition(target: startLocation ?? currentLocation, zoom: 9)
+          ? CameraPosition(target: currentLocation, zoom: 9)
           : CameraPosition(target: currentLocation, zoom: 17);
       googleMapController?.animateCamera(
         CameraUpdate.newCameraPosition(
@@ -318,13 +317,16 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Set<Polygon> polygon = {};
   //? get governorates
   MapState mapState = MapState.initial;
-  Future<void> getGovernorates(
-      {required bool internal, bool isStart = false}) async {
+  Future<void> getGovernorates({
+    required bool internal,
+    bool isStart = false,
+    LatLng? startLocation,
+  }) async {
     if (!internal && isStart) return;
     mapState = MapState.loading;
     emit(GetGovernoratesLoadingState());
     final result = await googleMapRepoImpl.getGovernorate(
-      currentLocation: currentLocation,
+      currentLocation: startLocation ?? currentLocation,
     );
     result.fold((l) {
       mapState = MapState.error;

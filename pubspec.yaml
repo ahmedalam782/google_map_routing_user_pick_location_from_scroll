@@ -3,26 +3,26 @@ description: "A powerful Flutter package for real-time navigation and route
   tracking using Google Maps API. This package supports background location
   updates, route calculation, and customizable map styles."
 version: 0.0.4
-homepage: 'https://github.com/Salah3mer/google_map_routing_user_pick_location_from_scroll.git'
+homepage: "https://github.com/Salah3mer/google_map_routing_user_pick_location_from_scroll.git"
 
 environment:
   sdk: ^3.4.2
-  flutter: '>=3.3.0'
+  flutter: ">=3.3.0"
 
 dependencies:
   dartz: ^0.10.1
-  dio: ^5.7.0
+  dio: ^5.9.0
   flutter:
     sdk: flutter
-  flutter_bloc: ^8.1.6
-  flutter_polyline_points: ^2.1.0
-  flutter_svg: ^2.1.0
-  geocoding: ^3.0.0
-  google_maps_flutter: ^2.10.0
-  location: ^7.0.1
-  toastification: ^2.3.0
+  flutter_bloc: ^9.1.1
+  flutter_polyline_points: ^3.1.0
+  flutter_svg: ^2.2.1
+  geocoding: ^4.0.0
+  google_maps_flutter: ^2.13.1
+  location: ^8.0.1
+  toastification: ^3.0.3
   uuid: ^4.5.1
-  maps_toolkit: ^2.0.0
+  maps_toolkit: ^3.1.0
   modal_progress_hud_nsn: ^0.5.1
 
 dev_dependencies:

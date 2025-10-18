@@ -38,6 +38,13 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   LatLng? currentLocationLatLang;
   LatLng? carLocation;
 
+  @override
+  Future<void> emit(GoogleMapState state) async {
+    if (!isClosed) {
+      return super.emit(state);
+    }
+  }
+
 //? getLocation
   Future<void> getLocationMyCurrentLocation({LatLng? startLocation}) async {
     try {
@@ -104,7 +111,6 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       ),
     );
   }
-  
 
   LatLng? selectedLocation;
   String? locationName;
@@ -196,6 +202,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Future<void> getPlaceDetails({
     required String placeId,
     bool internal = false,
+    bool isStart = false,
   }) async {
     final result = await googleMapRepoImpl.getPlaceDetails(placeId: placeId);
     result.fold((l) {
@@ -215,11 +222,45 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
           _onSearchAdd(r);
         } else {
           emit(GetPlaceDetailsErrorState(
-              errorMessage: 'المكان خارج الحدود المسموح بها'));
+              errorMessage:
+                  'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية'));
           return;
         }
       } else {
-        _onSearchAdd(r);
+        if (isStart) {
+          _onSearchAdd(r);
+          return;
+        }
+        if (regionModel == null) {
+          emit(GetPlaceDetailsErrorState(
+              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
+          return;
+        }
+
+        bool inside = chackInternalOrNot(LatLng(
+            r.result!.geometry!.location!.lat!,
+            r.result!.geometry!.location!.lng!));
+        if (inside) {
+          if (regionModel == null) {
+            emit(GetPlaceDetailsErrorState(
+                errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
+            return;
+          }
+
+          bool inside = chackInternalOrNot(LatLng(
+              r.result!.geometry!.location!.lat!,
+              r.result!.geometry!.location!.lng!));
+          if (inside) {
+            _onSearchAdd(r);
+          } else {
+            emit(GetPlaceDetailsErrorState(
+                errorMessage:
+                    'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
+            return;
+          }
+        } else {
+          _onSearchAdd(r);
+        }
       }
       emit(GetPlaceDetailsSuccessState());
     });
@@ -272,8 +313,9 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Set<Polygon> polygon = {};
   //? get governorates
   MapState mapState = MapState.initial;
-  Future<void> getGovernorates({required bool internal}) async {
-    if (!internal) return;
+  Future<void> getGovernorates(
+      {required bool internal, bool isStart = false}) async {
+    if (!internal && isStart) return;
     mapState = MapState.loading;
     emit(GetGovernoratesLoadingState());
     final result = await googleMapRepoImpl.getGovernorate(

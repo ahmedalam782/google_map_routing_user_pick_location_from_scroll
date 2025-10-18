@@ -423,7 +423,10 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
         );
         if (widget.cubit.regionModel == null) {
           await widget.cubit.getGovernorates(
-              internal: widget.internal, isStart: widget.isStart);
+            startLocation: widget.startLocation,
+            internal: widget.internal,
+            isStart: widget.isStart,
+          );
         }
       },
     );

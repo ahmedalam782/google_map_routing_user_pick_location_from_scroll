@@ -81,6 +81,9 @@ class MapScreen extends StatelessWidget {
           log('pointName Place: ${val.pointName}');
         },
         internal: false,
+        oldLocation:
+            const LatLng(35.1772740409823, 45.98494988507281),
+             // San Francisco
       ),
     );
   }

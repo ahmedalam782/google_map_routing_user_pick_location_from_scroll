@@ -23,6 +23,7 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
   final LatLng? startLocation;
   final bool internal;
   final bool isStart;
+  final LatLng? oldLocation;
 
   final void Function(MdOnUserSelectedPlace) selectedPlace;
 
@@ -34,6 +35,7 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
     required this.internal,
     required this.selectedPlace,
     this.isStart = true,
+    this.oldLocation,
   });
 
   @override
@@ -89,6 +91,7 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                       cubit: cubit,
                       mapStyle: mapStyle,
                       isStart: isStart,
+                      oldLocation: oldLocation,
                     ),
                     Padding(
                       padding:
@@ -340,6 +343,7 @@ class GoogleMapWidget extends StatefulWidget {
     required this.startLocation,
     required this.internal,
     this.isStart = true,
+    this.oldLocation,
   });
   final bool isUser;
   final bool internal;
@@ -347,6 +351,7 @@ class GoogleMapWidget extends StatefulWidget {
   final String? mapStyle;
   final LatLng? startLocation;
   final bool isStart;
+  final LatLng? oldLocation;
 
   @override
   State<GoogleMapWidget> createState() => _GoogleMapWidgetState();
@@ -420,6 +425,7 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
           startLocation: widget.startLocation,
           isStart: widget.isStart,
           internal: widget.internal,
+          oldLocation: widget.oldLocation,
         );
         if (widget.cubit.regionModel == null) {
           await widget.cubit.getGovernorates(

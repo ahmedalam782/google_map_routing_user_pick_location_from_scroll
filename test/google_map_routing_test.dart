@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing_method_channel.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -20,11 +19,6 @@ void main() {
   });
 
   test('getPlatformVersion', () async {
-    MdSoftGoogleMapUserPickLocationFromScroll googleMapRoutingPlugin =
-        MdSoftGoogleMapUserPickLocationFromScroll(
-      selectedPlace: (md) {},
-      internal: false,
-    );
     MockGoogleMapRoutingPlatform fakePlatform = MockGoogleMapRoutingPlatform();
     GoogleMapRoutingPlatform.instance = fakePlatform;
 

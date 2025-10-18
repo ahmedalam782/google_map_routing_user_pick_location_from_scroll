@@ -73,7 +73,7 @@ class MapScreen extends StatelessWidget {
       body: MdSoftGoogleMapUserPickLocationFromScroll(
         isUser: true,
         mapStyle: 'assets/json/map_style.json',
-        isStart: false,
+        isStart: true,
         startLocation:
             const LatLng(35.1772740409823, 45.98494988507281), // San Francisco
         selectedPlace: (val) {

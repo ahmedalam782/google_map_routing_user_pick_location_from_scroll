@@ -46,7 +46,10 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   }
 
 //? getLocation
-  Future<void> getLocationMyCurrentLocation({LatLng? startLocation}) async {
+  Future<void> getLocationMyCurrentLocation(
+      {LatLng? startLocation,
+      bool isStart = false,
+      bool internal = false}) async {
     try {
       mapState = MapState.loading;
       emit(GetCurrentLocationLoadingState());
@@ -59,7 +62,9 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
 
       currentLocation = startLocation ??
           LatLng(locationData.latitude!, locationData.longitude!);
-      var myCameraPosition = CameraPosition(target: currentLocation, zoom: 17);
+      var myCameraPosition = (!internal && !isStart)
+          ? CameraPosition(target: startLocation ?? currentLocation, zoom: 9)
+          : CameraPosition(target: currentLocation, zoom: 17);
       googleMapController?.animateCamera(
         CameraUpdate.newCameraPosition(
           myCameraPosition,

@@ -418,6 +418,8 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
 
         await widget.cubit.getLocationMyCurrentLocation(
           startLocation: widget.startLocation,
+          isStart: widget.isStart,
+          internal: widget.internal,
         );
         if (widget.cubit.regionModel == null) {
           await widget.cubit.getGovernorates(

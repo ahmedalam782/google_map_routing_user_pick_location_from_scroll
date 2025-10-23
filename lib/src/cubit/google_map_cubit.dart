@@ -341,14 +341,35 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       emit(GetGovernoratesErrorState(errorMessage: l.message));
     }, (r) {
       regionModel = r;
-      final Polygon polygon = Polygon(
-        polygonId: PolygonId(r.polygonId),
-        points:
+      final Polygon polygon;
+      if (internal) {
+        polygon = Polygon(
+          polygonId: PolygonId('${r.polygonId}_inverse'),
+          points: const // Outer boundary covering Iraq region
+              [
+            LatLng(37.5, 38.5), // Top-left (Northwest)
+            LatLng(37.5, 48.6), // Top-right (Northeast)
+            LatLng(29.0, 48.6), // Bottom-right (Southeast)
+            LatLng(29.0, 38.5), // Bottom-left (Southwest)
+            LatLng(37.5, 38.5) // Close the polygon
+          ],
+          holes: [
             r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
-        strokeWidth: 2,
-        strokeColor: Colors.red,
-        fillColor: Colors.red.withOpacity(0.15),
-      );
+          ],
+          strokeWidth: 2,
+          strokeColor: Colors.red,
+          fillColor: Colors.red.withValues(alpha: 0.15), // Outside red
+        );
+      } else {
+        polygon = Polygon(
+          polygonId: PolygonId(r.polygonId),
+          points:
+              r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
+          strokeWidth: 2,
+          strokeColor: Colors.red,
+          fillColor: Colors.red.withValues(alpha: 0.15),
+        );
+      }
       this.polygon.add(polygon);
       emit(GetGovernoratesSuccessState());
       mapState = MapState.loaded;

@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geocoding/geocoding.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:maps_toolkit/maps_toolkit.dart' as mp;
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/api/dio_client.dart';
@@ -16,6 +16,8 @@ import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/utils/exten
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:io';
+import 'package:geocoding/geocoding.dart' as geo;
 part 'google_map_state.dart';
 
 class GoogleMapCubit extends Cubit<GoogleMapState> {
@@ -124,36 +126,96 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     );
   }
 
+  static final Map<String, String> _osmCache = {};
+  static final Dio _osmDio = Dio();
+
+  static Future<String> getPlaceNameOSM(double lat, double lng) async {
+    final key = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
+    
+    // ✅ If present in cache, return immediately
+    if (_osmCache.containsKey(key)) return _osmCache[key]!;
+
+    String? address;
+
+    try {
+      final response = await _osmDio.get(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=$lat&lon=$lng&format=json&accept-language=ar',
+        options: Options(
+          headers: {'User-Agent': MdUserPickLocationGoogleMapConfig.userAgent},
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
+
+      final data = response.data;
+      if (data is Map) {
+        address = data['display_name'] as String?;
+      } else if (data is String) {
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is Map) {
+            address = decoded['display_name'] as String?;
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("LocationHelper OSM Error: $e");
+      }
+    }
+
+    // ✅ Fallback to geocoding if OSM request fails or returns no address
+    if (address == null || address.isEmpty) {
+      try {
+        await geo.setLocaleIdentifier('ar_SA');
+        final value = await geo.placemarkFromCoordinates(lat, lng);
+        if (value.isNotEmpty) {
+          geo.Placemark pm;
+          if (Platform.isIOS) {
+            pm = value[0];
+          } else {
+            pm = value.length > 2 ? value[2] : value[0];
+          }
+          bool same = pm.subAdministrativeArea == pm.subLocality;
+          final parts = [
+            pm.administrativeArea?.split(' ')[0],
+            pm.subAdministrativeArea,
+            if (!same) pm.subLocality,
+            pm.street,
+          ];
+          final fullAddress =
+              parts.where((e) => e != null && e.trim().isNotEmpty).join(' - ');
+          if (fullAddress.trim().isNotEmpty) {
+            address = fullAddress;
+          }
+        }
+      } catch (geoError) {
+        if (kDebugMode) {
+          print("LocationHelper Geocoding Fallback Error: $geoError");
+        }
+      }
+    }
+
+    final finalAddress = address ?? 'Unknown';
+    _osmCache[key] = finalAddress; // ✅ Cache it
+    return finalAddress;
+  }
+
   LatLng? selectedLocation;
   String? locationName;
   Future<void> selectedPlaceName(
     LatLng latLng,
   ) async {
-    await setLocaleIdentifier('ar_SA');
-    await placemarkFromCoordinates(
-      latLng.latitude,
-      latLng.longitude,
-    ).then((value) {
-      Placemark pm;
-      if (Platform.isIOS) {
-        pm = value[0];
-      } else {
-        pm = value[2];
-      }
-      bool same = pm.subAdministrativeArea == pm.subLocality;
-      final parts = [
-        pm.administrativeArea?.split(' ')[0],
-        pm.subAdministrativeArea,
-        if (!same) pm.subLocality,
-        pm.street,
-      ];
-      final fullAddress =
-          parts.where((e) => e != null && e.trim().isNotEmpty).join(' - ');
-      locationName = fullAddress;
+    try {
+      final address = await getPlaceNameOSM(latLng.latitude, latLng.longitude);
+      locationName = address;
       searchController.text = locationName!;
-    }).catchError((error) {
-      debugPrint('Error: $error');
-    });
+    } catch (error) {
+      debugPrint('Error in selectedPlaceName: $error');
+      locationName = 'Unknown';
+      searchController.text = locationName!;
+    }
     emit(SelectedLocationNameState());
   }
 

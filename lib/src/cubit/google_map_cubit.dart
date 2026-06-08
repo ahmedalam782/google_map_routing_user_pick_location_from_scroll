@@ -142,7 +142,10 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=$lat&lon=$lng&format=json&accept-language=ar',
         options: Options(
-          headers: {'User-Agent': MdUserPickLocationGoogleMapConfig.userAgent},
+          headers: {
+            'User-Agent': MdUserPickLocationGoogleMapConfig.userAgent,
+            'Accept-Language': 'ar',
+          },
           sendTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 4),
         ),

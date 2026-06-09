@@ -4,6 +4,13 @@ import 'package:toastification/toastification.dart';
 String? _currentMessage;
 ToastificationItem? _currentToast;
 
+void _clearCurrentToast(ToastificationItem item) {
+  if (_currentToast == item) {
+    _currentMessage = null;
+    _currentToast = null;
+  }
+}
+
 void showToastificationWidget({
   required String message,
   required BuildContext context,
@@ -34,24 +41,9 @@ void showToastificationWidget({
     direction: TextDirection.rtl,
     autoCloseDuration: Duration(seconds: duration),
     callbacks: ToastificationCallbacks(
-      onAutoCompleteCompleted: (item) {
-        if (_currentToast == item) {
-          _currentMessage = null;
-          _currentToast = null;
-        }
-      },
-      onDismissed: (item) {
-        if (_currentToast == item) {
-          _currentMessage = null;
-          _currentToast = null;
-        }
-      },
-      onCloseButtonTap: (item) {
-        if (_currentToast == item) {
-          _currentMessage = null;
-          _currentToast = null;
-        }
-      },
+      onAutoCompleteCompleted: _clearCurrentToast,
+      onDismissed: _clearCurrentToast,
+      onCloseButtonTap: _clearCurrentToast,
     ),
   );
 }

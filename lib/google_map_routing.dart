@@ -46,6 +46,12 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
       create: (context) => GoogleMapCubit(),
       child: BlocConsumer<GoogleMapCubit, GoogleMapState>(
         listener: (context, state) {
+          if (state is GetLocationSuccessState ||
+              state is GetPlaceDetailsSuccessState ||
+              state is GetGovernoratesSuccessState ||
+              state is SelectedLocationNameState) {
+            dismissToastificationWidget();
+          }
           if (state is GetLocationErrorState) {
             showToastificationWidget(
               message: state.errorMessage,
@@ -401,6 +407,7 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
           bool inSide = widget.cubit.chackInternalOrNot(location);
           if (inSide) {
             widget.cubit.selectedPlaceName(location);
+            dismissToastificationWidget();
           } else {
             showToastificationWidget(
               message:
@@ -411,6 +418,7 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
         } else {
           if (widget.isStart) {
             widget.cubit.selectedPlaceName(location);
+            dismissToastificationWidget();
             return;
           }
           if (widget.cubit.regionModel == null) {
@@ -425,6 +433,7 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
             );
           } else {
             widget.cubit.selectedPlaceName(location);
+            dismissToastificationWidget();
           }
         }
       },

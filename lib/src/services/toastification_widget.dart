@@ -49,3 +49,12 @@ void showToastificationWidget({
     ),
   );
 }
+
+void dismissToastificationWidget() {
+  _currentMessage = null;
+  if (_currentToast != null) {
+    toastification.dismiss(_currentToast!);
+    _currentToast = null;
+  }
+  toastification.dismissAll(delayForAnimation: false);
+}

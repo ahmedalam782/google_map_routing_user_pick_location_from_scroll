@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/api/dio_client.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/api/end_points.dart';
@@ -68,7 +69,7 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
 
       return Right(RegionModel.fromJson(response.data));
     } on DioException catch (e) {
-      print('Error getting governorate: ${e.message}');
+      debugPrint('Error getting governorate: ${e.message}');
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));

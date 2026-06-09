@@ -94,17 +94,17 @@ Future<bool> requestLocationPermissions() async {
   PermissionStatus foregroundStatus =
       await Permission.locationWhenInUse.request();
   if (!foregroundStatus.isGranted) {
-    print("Foreground location permission denied");
+    log("Foreground location permission denied");
     return false;
   }
 
   // Then request background location permission.
   PermissionStatus backgroundStatus = await Permission.locationAlways.request();
   if (!backgroundStatus.isGranted) {
-    print("Background location permission denied");
+    log("Background location permission denied");
     return false;
   }
 
-  print("Both foreground and background location permissions granted");
+  log("Both foreground and background location permissions granted");
   return true;
 }

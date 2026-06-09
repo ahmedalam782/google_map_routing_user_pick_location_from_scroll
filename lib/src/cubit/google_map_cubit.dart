@@ -92,6 +92,14 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       mapState = MapState.error;
       emit(GetLocationErrorState(
           errorMessage: 'Please Check your  Location Permission '));
+    } on PlatformException catch (e) {
+      mapState = MapState.error;
+      emit(GetLocationErrorState(
+          errorMessage: 'Get Location Failed: ${e.message ?? e.toString()}'));
+    } catch (e) {
+      mapState = MapState.error;
+      emit(GetLocationErrorState(
+          errorMessage: 'An unexpected location error occurred.'));
     }
   }
 
@@ -102,6 +110,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       {required String mapStyle, Color? primaryColor}) async {
     mapStyleString = await rootBundle.loadString(mapStyle);
     this.primaryColor = primaryColor ?? this.primaryColor;
+    // ignore: deprecated_member_use
     googleMapController!.setMapStyle(mapStyleString);
     emit(GetMapStyleSuccessState());
   }
@@ -285,6 +294,11 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     result.fold((l) {
       emit(GetPlaceDetailsErrorState(errorMessage: l.message));
     }, (r) async {
+      if (isStart && !internal) {
+        _onSearchAdd(r);
+        emit(GetPlaceDetailsSuccessState());
+        return;
+      }
       if (internal) {
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
@@ -304,10 +318,6 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
           return;
         }
       } else {
-        if (isStart) {
-          _onSearchAdd(r);
-          return;
-        }
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
               errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
@@ -318,23 +328,10 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
             r.result!.geometry!.location!.lat!,
             r.result!.geometry!.location!.lng!));
         if (inside) {
-          if (regionModel == null) {
-            emit(GetPlaceDetailsErrorState(
-                errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
-            return;
-          }
-
-          bool inside = chackInternalOrNot(LatLng(
-              r.result!.geometry!.location!.lat!,
-              r.result!.geometry!.location!.lng!));
-          if (inside) {
-            _onSearchAdd(r);
-          } else {
-            emit(GetPlaceDetailsErrorState(
-                errorMessage:
-                    'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
-            return;
-          }
+          emit(GetPlaceDetailsErrorState(
+              errorMessage:
+                  'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
+          return;
         } else {
           _onSearchAdd(r);
         }

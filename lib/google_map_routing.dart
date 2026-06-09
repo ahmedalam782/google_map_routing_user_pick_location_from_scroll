@@ -111,17 +111,19 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                       right: 16,
                       child: Align(
                         alignment: Alignment.topRight,
-                        child: Container(
+                        child: SizedBox(
                           width: width / 1.2,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(.9),
+                          child: Material(
+                            color: Colors.white.withValues(alpha: 0.9),
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(16),
                               topRight: Radius.circular(16),
                             ),
-                          ),
-                          child: PlacesListWidget(
-                            internal: internal,
+                            clipBehavior: Clip.antiAlias,
+                            child: PlacesListWidget(
+                              internal: internal,
+                              isStart: isStart,
+                            ),
                           ),
                         ),
                       ),
@@ -290,9 +292,11 @@ class SearchTextFormFeild extends StatelessWidget {
 
 class PlacesListWidget extends StatelessWidget {
   final bool internal;
+  final bool isStart;
   const PlacesListWidget({
     super.key,
     required this.internal,
+    required this.isStart,
   });
   @override
   Widget build(BuildContext context) {
@@ -302,30 +306,34 @@ class PlacesListWidget extends StatelessWidget {
         return ListView.builder(
             shrinkWrap: true,
             padding: EdgeInsets.zero,
-            itemBuilder: (context, index) => ListTile(
-                  onTap: () async {
-                    await cubit.getPlaceDetails(
-                        placeId: cubit.predictions[index].placeId!,
-                        internal: internal);
-                    if (context.mounted) {
-                      FocusScope.of(context).unfocus();
-                    }
-                  },
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                  ),
-                  leading: SvgPicture.asset(
-                    AppImages.clock,
-                    height: 20,
-                    width: 20,
-                    fit: BoxFit.scaleDown,
-                  ),
-                  title: Text(cubit.predictions[index].description!),
-                  trailing: SvgPicture.asset(
-                    AppImages.frame,
-                    height: 20,
-                    width: 20,
-                    fit: BoxFit.scaleDown,
+            itemBuilder: (context, index) => Material(
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    onTap: () async {
+                      await cubit.getPlaceDetails(
+                          placeId: cubit.predictions[index].placeId!,
+                          internal: internal,
+                          isStart: isStart);
+                      if (context.mounted) {
+                        FocusScope.of(context).unfocus();
+                      }
+                    },
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                    ),
+                    leading: SvgPicture.asset(
+                      AppImages.clock,
+                      height: 20,
+                      width: 20,
+                      fit: BoxFit.scaleDown,
+                    ),
+                    title: Text(cubit.predictions[index].description!),
+                    trailing: SvgPicture.asset(
+                      AppImages.frame,
+                      height: 20,
+                      width: 20,
+                      fit: BoxFit.scaleDown,
+                    ),
                   ),
                 ),
             itemCount: cubit.predictions.length);

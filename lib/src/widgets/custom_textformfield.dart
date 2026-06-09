@@ -135,7 +135,7 @@ class CustomTextFormFeild extends StatelessWidget {
       borderRadius: const BorderRadius.all(Radius.circular(38)),
       borderSide: haveBorder!
           ? BorderSide(
-              width: .5, color: const Color(0xff242021).withOpacity(.6))
+              width: .5, color: const Color(0xff242021).withValues(alpha: 0.6))
           : BorderSide.none,
     );
   }

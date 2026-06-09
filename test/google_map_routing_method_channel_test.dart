@@ -7,7 +7,7 @@ void main() {
 
   MethodChannelGoogleMapRouting platform = MethodChannelGoogleMapRouting();
   const MethodChannel channel =
-      MethodChannel('mdsoft_google_map_user_pick_location_from_scroll ');
+      MethodChannel('google_map_routing');
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

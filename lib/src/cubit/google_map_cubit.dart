@@ -402,9 +402,8 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       emit(GetGovernoratesErrorState(errorMessage: l.message));
     }, (r) {
       regionModel = r;
-      final Polygon polygon;
       if (internal) {
-        polygon = Polygon(
+        final Polygon polygon = Polygon(
           polygonId: PolygonId('${r.polygonId}_inverse'),
           points: const // Outer boundary covering Iraq region
               [
@@ -421,17 +420,20 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
           strokeColor: Colors.red,
           fillColor: Colors.red.withValues(alpha: 0.15), // Outside red
         );
+        this.polygon.add(polygon);
       } else {
-        polygon = Polygon(
-          polygonId: PolygonId(r.polygonId),
-          points:
-              r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
-          strokeWidth: 2,
-          strokeColor: Colors.red,
-          fillColor: Colors.red.withValues(alpha: 0.15),
-        );
+        if (!isStart) {
+          final Polygon polygon = Polygon(
+            polygonId: PolygonId(r.polygonId),
+            points:
+                r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
+            strokeWidth: 2,
+            strokeColor: Colors.red,
+            fillColor: Colors.red.withValues(alpha: 0.15),
+          );
+          this.polygon.add(polygon);
+        }
       }
-      this.polygon.add(polygon);
       emit(GetGovernoratesSuccessState());
       mapState = MapState.loaded;
     });

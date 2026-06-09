@@ -392,7 +392,6 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     bool isStart = false,
     LatLng? startLocation,
   }) async {
-    if (!internal && isStart) return;
     mapState = MapState.loading;
     emit(GetGovernoratesLoadingState());
     final result = await googleMapRepoImpl.getGovernorate(

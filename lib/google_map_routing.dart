@@ -413,6 +413,9 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
             widget.cubit.selectedPlaceName(location);
             return;
           }
+          if (widget.cubit.regionModel == null) {
+            return;
+          }
           bool inSide = widget.cubit.chackInternalOrNot(location);
           if (inSide) {
             showToastificationWidget(

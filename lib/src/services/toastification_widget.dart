@@ -25,7 +25,6 @@ void showToastificationWidget({
     alignment: Alignment.topCenter,
     direction: TextDirection.rtl,
     autoCloseDuration: Duration(seconds: duration),
-    callbacks: ToastificationCallbacks(),
   );
 }
 

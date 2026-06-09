@@ -46,6 +46,12 @@ void showToastificationWidget({
           _currentToast = null;
         }
       },
+      onCloseButtonTap: (item) {
+        if (_currentToast == item) {
+          _currentMessage = null;
+          _currentToast = null;
+        }
+      },
     ),
   );
 }

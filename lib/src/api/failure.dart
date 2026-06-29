@@ -13,7 +13,6 @@ class ServerFailure extends Failure {
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
         return ServerFailure('Connection timeout with api server');
-
       case DioExceptionType.sendTimeout:
         return ServerFailure('Send timeout with ApiServer');
       case DioExceptionType.receiveTimeout:
@@ -33,6 +32,8 @@ class ServerFailure extends Failure {
           ServerFailure('Error details: ${e.error}');
         }
         return ServerFailure('Opps There was an Error, Please try again');
+      case DioExceptionType.transformTimeout:
+        return ServerFailure('Transform timeout with ApiServer');
     }
   }
 

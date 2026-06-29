@@ -11,7 +11,7 @@ environment:
 
 dependencies:
   dartz: ^0.10.1
-  dio: ^5.9.2
+  dio: ^5.10.0
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1

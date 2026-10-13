@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:maps_toolkit/maps_toolkit.dart' as mp;
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/api/dio_client.dart';
@@ -13,11 +12,9 @@ import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/plac
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/places_model/prediction.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/repositories/google_map_repo.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/utils/extension.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
 import 'package:uuid/uuid.dart';
-import 'dart:io';
-import 'package:geocoding/geocoding.dart' as geo;
 part 'google_map_state.dart';
 
 class GoogleMapCubit extends Cubit<GoogleMapState> {
@@ -57,14 +54,14 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       mapState = MapState.loading;
       emit(GetCurrentLocationLoadingState());
       Future.delayed(const Duration(seconds: 5));
-      LocationData locationData = await locationService.getLocation();
+      final Position locationData = await locationService.getLocation();
       currentLocationLatLang = LatLng(
-        locationData.latitude!,
-        locationData.longitude!,
+        locationData.latitude,
+        locationData.longitude,
       );
 
       currentLocation = oldLocation ??
-          LatLng(locationData.latitude!, locationData.longitude!);
+          LatLng(locationData.latitude, locationData.longitude);
       var myCameraPosition = (!internal && !isStart)
           ? CameraPosition(target: oldLocation ?? currentLocation, zoom: 9)
           : CameraPosition(target: oldLocation ?? currentLocation, zoom: 17);
@@ -136,99 +133,173 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   }
 
   static final Map<String, String> _osmCache = {};
-  static final Dio _osmDio = Dio();
+  static final Dio _osmDio = Dio(
+    BaseOptions(
+      baseUrl: 'https://nominatim.openstreetmap.org',
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 12),
+      sendTimeout: const Duration(seconds: 12),
+      headers: const {
+        'Accept': 'application/json',
+        'Accept-Language': 'ar',
+      },
+    ),
+  );
+  static Future<void> _osmChain = Future<void>.value();
+  static DateTime _osmNextSlot = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Nominatim allows one request per second. Queue calls so scrolling
+  /// the map does not get blocked with HTTP 429.
+  static Future<T> _runOsmSlot<T>(Future<T> Function() action) {
+    final result = Completer<T>();
+    _osmChain = _osmChain.catchError((_) {}).then((_) async {
+      final wait = _osmNextSlot.difference(DateTime.now());
+      if (wait > Duration.zero) {
+        await Future<void>.delayed(wait);
+      }
+      _osmNextSlot = DateTime.now().add(const Duration(seconds: 1));
+      try {
+        result.complete(await action());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 
   static Future<String> getPlaceNameOSM(double lat, double lng) async {
     final key = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
-    
-    // ✅ If present in cache, return immediately
-    if (_osmCache.containsKey(key)) return _osmCache[key]!;
+    final cached = _osmCache[key];
+    if (cached != null && cached.isNotEmpty) return cached;
 
-    String? address;
-
-    try {
-      final response = await _osmDio.get(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=$lat&lon=$lng&format=json&accept-language=ar',
-        options: Options(
-          headers: {
-            'User-Agent': MdUserPickLocationGoogleMapConfig.userAgent,
-            'Accept-Language': 'ar',
-          },
-          sendTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 4),
-        ),
-      );
-
-      final data = response.data;
-      if (data is Map) {
-        address = data['display_name'] as String?;
-      } else if (data is String) {
-        try {
-          final decoded = jsonDecode(data);
-          if (decoded is Map) {
-            address = decoded['display_name'] as String?;
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print("LocationHelper OSM Error: $e");
-      }
-    }
-
-    // ✅ Fallback to geocoding if OSM request fails or returns no address
-    if (address == null || address.isEmpty) {
+    for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        await geo.setLocaleIdentifier('ar_SA');
-        final value = await geo.placemarkFromCoordinates(lat, lng);
-        if (value.isNotEmpty) {
-          geo.Placemark pm;
-          if (Platform.isIOS) {
-            pm = value[0];
-          } else {
-            pm = value.length > 2 ? value[2] : value[0];
-          }
-          bool same = pm.subAdministrativeArea == pm.subLocality;
-          final parts = [
-            pm.administrativeArea?.split(' ')[0],
-            pm.subAdministrativeArea,
-            if (!same) pm.subLocality,
-            pm.street,
-          ];
-          final fullAddress =
-              parts.where((e) => e != null && e.trim().isNotEmpty).join(' - ');
-          if (fullAddress.trim().isNotEmpty) {
-            address = fullAddress;
-          }
+        final address = await _runOsmSlot(() => _reverseGeocodeOsm(lat, lng));
+        if (address != null && address.isNotEmpty) {
+          _osmCache[key] = address;
+          return address;
         }
-      } catch (geoError) {
-        if (kDebugMode) {
-          print("LocationHelper Geocoding Fallback Error: $geoError");
+        return 'Unknown';
+      } catch (e) {
+        debugPrint('OSM request failed: $e');
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(seconds: 2));
         }
       }
     }
+    return 'Unknown';
+  }
 
-    final finalAddress = address ?? 'Unknown';
-    _osmCache[key] = finalAddress; // ✅ Cache it
-    return finalAddress;
+  static Future<String?> _reverseGeocodeOsm(double lat, double lng) async {
+    final userAgent = MdUserPickLocationGoogleMapConfig.userAgent.trim();
+    final response = await _osmDio.get<dynamic>(
+      '/reverse',
+      queryParameters: <String, dynamic>{
+        'lat': lat,
+        'lon': lng,
+        'format': 'jsonv2',
+        'addressdetails': '1',
+        'accept-language': 'ar',
+      },
+      options: Options(
+        responseType: ResponseType.json,
+        headers: {
+          'User-Agent': userAgent.isEmpty
+              ? 'MdSoftGoogleMapUserPickLocationFromScroll/1.0 (info@mdsoft.com)'
+              : userAgent,
+        },
+      ),
+    );
+
+    if (response.statusCode != 200) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        message: 'OSM reverse geocode failed (${response.statusCode})',
+      );
+    }
+    return _addressFromOsm(response.data);
+  }
+
+  static String? _addressFromOsm(dynamic data) {
+    Map<String, dynamic>? map;
+    if (data is Map) {
+      map = Map<String, dynamic>.from(data);
+    } else if (data is String && data.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map) {
+          map = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+    if (map == null || map['error'] != null) return null;
+
+    final rawAddress = map['address'];
+    if (rawAddress is Map) {
+      final address = Map<String, dynamic>.from(rawAddress);
+      String? pick(List<String> keys) {
+        for (final key in keys) {
+          final value = address[key];
+          if (value is String && value.trim().isNotEmpty) return value.trim();
+        }
+        return null;
+      }
+
+      final parts = <String?>[
+        pick(const ['state', 'province', 'region']),
+        pick(const ['city', 'town', 'village', 'municipality']),
+        pick(const ['city_district', 'suburb', 'quarter', 'neighbourhood']),
+        pick(const ['road', 'pedestrian', 'street']),
+      ].whereType<String>().toList();
+
+      final unique = <String>[];
+      for (final part in parts) {
+        if (!unique.contains(part)) unique.add(part);
+      }
+      if (unique.isNotEmpty) return unique.join(' - ');
+    }
+
+    final display = map['display_name'];
+    if (display is String && display.trim().isNotEmpty) return display.trim();
+    return null;
   }
 
   LatLng? selectedLocation;
   String? locationName;
-  Future<void> selectedPlaceName(
-    LatLng latLng,
-  ) async {
-    try {
-      final address = await getPlaceNameOSM(latLng.latitude, latLng.longitude);
-      locationName = address;
-      searchController.text = locationName!;
-    } catch (error) {
-      debugPrint('Error in selectedPlaceName: $error');
-      locationName = 'Unknown';
-      searchController.text = locationName!;
+  Timer? _placeNameTimer;
+  int _placeNameToken = 0;
+  Completer<void>? _placeNameDone;
+
+  Future<void> selectedPlaceName(LatLng latLng) {
+    final token = ++_placeNameToken;
+    _placeNameTimer?.cancel();
+    final previous = _placeNameDone;
+    if (previous != null && !previous.isCompleted) {
+      previous.complete();
     }
-    emit(SelectedLocationNameState());
+    final done = Completer<void>();
+    _placeNameDone = done;
+    _placeNameTimer = Timer(const Duration(milliseconds: 600), () async {
+      try {
+        if (token != _placeNameToken || isClosed) return;
+        final address =
+            await getPlaceNameOSM(latLng.latitude, latLng.longitude);
+        if (token != _placeNameToken || isClosed) return;
+        locationName = address;
+        searchController.text = address;
+        emit(SelectedLocationNameState());
+      } catch (error) {
+        if (token != _placeNameToken || isClosed) return;
+        debugPrint('Error in selectedPlaceName: $error');
+        locationName = 'Unknown';
+        searchController.text = locationName!;
+        emit(SelectedLocationNameState());
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    });
+    return done.future;
   }
 
   //? updateCurrentLocationMarker

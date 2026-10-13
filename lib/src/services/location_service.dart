@@ -1,23 +1,23 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
 import 'package:flutter/services.dart';
 import 'dart:math';
 
 class LocationService {
-  Location location = Location();
-  bool _isBackgroundModeEnabled = false;
-  StreamSubscription<LocationData>? _locationSubscription;
+  StreamSubscription<Position>? _locationSubscription;
+
+  static const LocationSettings _highAccuracy = LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 2,
+  );
 
   Future<void> checkAndRequestLocationService() async {
     try {
-      bool isServiceEnabled = await location.serviceEnabled();
+      final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isServiceEnabled) {
-        isServiceEnabled = await location.requestService();
-        if (!isServiceEnabled) {
-          throw LocationServiceException();
-        }
+        throw LocationServiceException();
       }
     } on PlatformException catch (e) {
       debugPrint("Location service check failed: ${e.message}");
@@ -27,51 +27,50 @@ class LocationService {
 
   Future<void> checkAndRequestLocationPermission() async {
     try {
-      if (kIsWeb) return;
-      var permissionStatus = await location.hasPermission();
-      if (permissionStatus == PermissionStatus.deniedForever) {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.deniedForever) {
         throw LocationPermissionException();
       }
-      if (permissionStatus == PermissionStatus.denied) {
-        permissionStatus = await location.requestPermission();
-        if (permissionStatus != PermissionStatus.granted) {
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission != LocationPermission.whileInUse &&
+            permission != LocationPermission.always) {
           throw LocationPermissionException();
         }
       }
-      if (await location.isBackgroundModeEnabled() &&
-          !_isBackgroundModeEnabled &&
-          !kIsWeb) {
-        await location.enableBackgroundMode(enable: true);
-        _isBackgroundModeEnabled = true;
-      }
+    } on PermissionDeniedException {
+      throw LocationPermissionException();
     } on PlatformException catch (e) {
       debugPrint("Permission check failed: ${e.message}");
       throw LocationPermissionException();
     }
   }
 
-  void getRealTimeLocationData(void Function(LocationData)? onData) async {
+  void getRealTimeLocationData(void Function(Position)? onData) async {
     try {
       await checkAndRequestLocationService();
       await checkAndRequestLocationPermission();
-      _locationSubscription?.cancel();
-      _locationSubscription = location.onLocationChanged.listen(onData);
-      await location.changeSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 2.0,
-        interval: 1000,
-      );
+      await _locationSubscription?.cancel();
+      _locationSubscription = Geolocator.getPositionStream(
+        locationSettings: _highAccuracy,
+      ).listen(onData);
     } on PlatformException catch (e) {
       debugPrint("Real-time location failed: ${e.message}");
       rethrow;
     }
   }
 
-  Future<LocationData> getLocation() async {
+  Future<Position> getLocation() async {
     try {
       await checkAndRequestLocationService();
       await checkAndRequestLocationPermission();
-      return await location.getLocation();
+      return await Geolocator.getCurrentPosition(
+        locationSettings: _highAccuracy,
+      );
+    } on LocationServiceDisabledException {
+      throw LocationServiceException();
+    } on PermissionDeniedException {
+      throw LocationPermissionException();
     } on PlatformException catch (e) {
       debugPrint("Get location failed: ${e.message}");
       rethrow;
@@ -81,11 +80,6 @@ class LocationService {
   void stopTracking() {
     _locationSubscription?.cancel();
     _locationSubscription = null;
-    location.onLocationChanged.drain();
-    location.changeSettings(
-      accuracy: LocationAccuracy.low,
-      distanceFilter: double.infinity,
-    );
   }
 
   static const double _earthRadiusKm = 6371.0;

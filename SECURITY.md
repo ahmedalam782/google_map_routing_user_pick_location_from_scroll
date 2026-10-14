@@ -34,14 +34,12 @@ If you discover a security vulnerability in this package, please report it immed
 | **flutter_background_service**         | [GitHub Policy](https://github.com/ekasetiawans/flutter_background_service/security/policy)             |
 | **flutter_background_service_android** | _Not documented_                                                                                         |
 | **flutter_background_service_ios**     | _Not documented_                                                                                         |
-| **flutter_bloc**                       | _Not documented_                                                                                         |
 | **flutter_polyline_points**            | _Not documented_                                                                                         |
 | **google_maps_flutter**                | _Not documented_                                                                                         |
 | **google_maps_flutter_web**            | _Not documented_                                                                                         |
 | **location**                           | _Not documented_                                                                                         |
 | **socket_io_client**                   | _Not documented_                                                                                         |
 | **toastification**                     | _Not documented_                                                                                         |
-| **dartz**                              | _Not documented_                                                                                         |
 | **dio**                                | [Dio SECURITY.md](https://github.com/cfug/dio/blob/main/SECURITY.md)                                     |
 
 > **Note:** For packages without a published policy, we continuously monitor releases for security updates.

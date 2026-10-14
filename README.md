@@ -21,10 +21,9 @@ Add the package to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  # mdsoft_google_map_user_pick_location_from_scroll : ^<latest_version>  
-  mdsoft_google_map_user_pick_location_from_scroll :
-   git: 'https://github.com/Salah3mer/google_map_routing_user_pick_location_from_scroll.git' 
-  
+  # mdsoft_google_map_user_pick_location_from_scroll : ^<latest_version>
+  mdsoft_google_map_user_pick_location_from_scroll:
+    git: "https://github.com/Salah3mer/google_map_routing_user_pick_location_from_scroll.git"
 ```
 
 ---
@@ -53,39 +52,39 @@ dependencies:
 
 - Add the following dependencies to your `android/gradle/wrapper/gradle-wrapper.properties` file
 
- ```properties
+```properties
 distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
-  ```
+```
 
 - Add the following dependencies to your `android/app/build.gradle` file
 
- ```gradle
+```gradle
 android {
-    compileSdk = 35
-    ndkVersion = "25.1.8937393"
+   compileSdk = 35
+   ndkVersion = "25.1.8937393"
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
+   compileOptions {
+       sourceCompatibility = JavaVersion.VERSION_1_8
+       targetCompatibility = JavaVersion.VERSION_1_8
+   }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
-    }
+   kotlinOptions {
+       jvmTarget = JavaVersion.VERSION_1_8
+   }
 }
-  ```
+```
 
 - Add the following dependencies to your `android/settings.gradle` file
 
- ```gradle
+```gradle
 plugins {
-    id "com.android.application" version "8.3.2" apply false
+   id "com.android.application" version "8.3.2" apply false
 }
-  ```
+```
 
 - **iOS**: Add the following permissions to your `ios/Runner/Info.plist` file
 
-``` plist
+```plist
 <!-- Info.plist snippet for iOS -->
 <dict>
   <!-- Location Permissions -->
@@ -111,31 +110,13 @@ plugins {
 
 - **Web**: Add the following permissions to your `web/index.html` file in the `head` section
 
-``` <script src="https://maps.googleapis.com/maps/api/js?key=APIKEY"></script> ```
+`<script src="https://maps.googleapis.com/maps/api/js?key=APIKEY"></script>`
 
 ## Usage 🚀
 
 1. Before running the app, ensure you have set up all necessary permissions (location, notification) and API keys (Google Maps API key) in your `AndroidManifest.xml` and `Info.plist` files.
 
-2. Add the following code to your `main.dart` file to initialize the package:
-
-```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter is initialized
-  
-  // Request permissions here (location, notification, etc.)
-  
-  // Initialize the MdUserPickLocationGoogleMapConfig with your API Key
-  MdUserPickLocationGoogleMapConfig.initialize(
-    apiKey: 'YOUR_API_KEY',
-    primaryColor: Colors.blue,   // Optional: customize the primary
-    baseUrl :  'YearBaseUrl',
-    fontFamily: 'Your Font Family', // Optional: customize the font family
-  );
-  
-  runApp(MyApp());
-}
-```
+2. Pass `MdUserPickLocationGoogleMapConfig` on the screen that opens the picker. `main` does not set it. Use `copyWith` on that screen when one value should change.
 
 ### Implementing the Location Picker
 
@@ -143,9 +124,18 @@ To use the location picker in your app, include the `MdSoftGoogleMapUserPickLoca
 
 ```dart
 MdSoftGoogleMapUserPickLocationFromScroll(
+  config: const MdUserPickLocationGoogleMapConfig(
+    apiKey: 'YOUR_API_KEY',
+    baseUrl: 'YourBaseUrl',
+    searchGovernorate: true,
+    governorateEndpoint: 'governorates/me',
+  ).copyWith(
+    primaryColor: Colors.blue,
+    fontFamily: 'Your Font Family',
+  ),
   isUser: true, // Set to true for user mode, false for driver mode
   mapStyle: 'assets/json/map_style.json', // Path to your custom map style JSON file (optional)
-  isStart: false, /// for chinging pin 
+  isStart: false, /// for chinging pin
 
   internal: false, // added if  you wont to make it internal or not
   startLocation:
@@ -160,6 +150,55 @@ MdSoftGoogleMapUserPickLocationFromScroll(
 ),
 ```
 
+The picker keeps its own state with Flutter `ChangeNotifier`. You do not add `flutter_bloc`, Provider, Riverpod, or GetX to use it. The `selectedPlace` callback is the result.
+
+Pass a `LocationPickerController` only when your own widget needs to move the camera or clear search:
+
+```dart
+final picker = LocationPickerController();
+
+MdSoftGoogleMapUserPickLocationFromScroll(
+  controller: picker,
+  internal: true,
+  selectedPlace: (place) {},
+);
+```
+
+If `controller` is omitted, the widget creates and disposes one for you.
+
+### Text, colors, and icons
+
+Pass one `LocationPickerTheme` to change the words, the icon color, and the rest of the picker. Each sentence, color, and image has an enum name. You only set the ones you want to change.
+
+```dart
+MdSoftGoogleMapUserPickLocationFromScroll(
+  internal: false,
+  theme: const LocationPickerTheme(
+    iconColor: Colors.blue,
+    primaryColor: Colors.blue,
+    textDirection: TextDirection.ltr,
+    placeLanguageCode: 'en',
+    textOverrides: {
+      LocationPickerText.searchHint: 'Where do you want to go?',
+      LocationPickerText.confirmPoint: 'Save point',
+    },
+  ),
+  selectedPlace: (place) {},
+)
+```
+
+`iconColor` tints Flutter icons and SVG files. A PNG or JPG keeps its own pixels. Leave a picture unset to keep the package default. Replace one with either a Flutter icon or an asset path:
+
+```dart
+theme: LocationPickerTheme(
+  search: const LocationPickerGraphic.icon(Icons.search),
+  startPin: const LocationPickerGraphic.asset('assets/images/pin.png'),
+  currentLocationButton: const LocationPickerGraphic.asset(
+    'assets/images/locate.svg',
+  ),
+)
+```
+
 ## Complete Example
 
 Here's a complete example integrating the location picker in your Flutter application:
@@ -168,36 +207,30 @@ Here's a complete example integrating the location picker in your Flutter applic
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing.dart';
+import 'package:mdsoft_google_map_user_pick_location_from_scroll/md_user_pick_location_google_map_config.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Request notification permissions
   await Permission.notification.isDenied.then((value) async {
     if (value) {
       await Permission.notification.request();
     }
   });
-  
+
   // Handle permanently denied notification permissions
   await Permission.notification.isPermanentlyDenied.then((value) async {
     if (value) {
       await openAppSettings();
     }
   });
-  
+
   // Request location permissions
   await requestLocationPermissions();
-  
-  // Initialize the package configuration
-  MdUserPickLocationGoogleMapConfig.initialize(
-    apiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
-    primaryColor: Colors.blue, // Optional
-    fontFamily: 'Hanimation', // Optional
-  );
-  
+
   runApp(const MyApp());
 }
 
@@ -225,11 +258,15 @@ class MapScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Location Picker Demo'),
       ),
-      body: MdSoftGoogleMapUserPickLocation(
+      body: MdSoftGoogleMapUserPickLocationFromScroll(
+        config: const MdUserPickLocationGoogleMapConfig(
+          apiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
+          baseUrl: 'YourBaseUrl',
+        ).copyWith(fontFamily: 'Hanimation'),
         isUser: true, // User mode
         mapStyle: 'assets/json/map_style.json', // Custom map style (optional)
         floatingActionButtonIcon: const Icon(
-          Icons.my_location, 
+          Icons.my_location,
           color: Colors.black
         ),
         selectedPlace: (MdOnUserSelectedPlace selectedPlaces) {
@@ -237,7 +274,7 @@ class MapScreen extends StatelessWidget {
           log('Starting location: ${selectedPlaces.selectedStartLocationLatLng}');
           log('Destination locations: ${selectedPlaces.selectedEndLocationLatLng}');
           log('Location names: ${selectedPlaces.pointsName}');
-          
+
           // Navigate to a new screen with the selected locations
           // or process the data as needed
         },

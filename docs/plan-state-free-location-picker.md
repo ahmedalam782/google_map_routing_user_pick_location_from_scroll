@@ -1,6 +1,6 @@
 # Plan: use the location picker without Flutter Bloc
 
-Status: plan only. No package code changes in this step.
+Status: implemented with `ChangeNotifier` (`LocationPickerController`).
 
 Branch: `docs/state-free-location-picker`
 

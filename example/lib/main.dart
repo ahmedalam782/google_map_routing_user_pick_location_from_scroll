@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mdsoft_google_map_routing_example/test_screen.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/google_map_routing.dart';
+import 'package:mdsoft_google_map_user_pick_location_from_scroll/md_user_pick_location_google_map_config.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
@@ -25,11 +26,6 @@ void main() async {
     await requestLocationPermissions();
   }
 
-  MdUserPickLocationGoogleMapConfig.initialize(
-    apiKey: 'ApiKey',
-    fontFamily: 'Hanimation',
-    baseUrl: 'http://192.168.1.61:1210/api/',
-  );
   runApp(const MyApp());
 }
 
@@ -71,6 +67,12 @@ class MapScreen extends StatelessWidget {
         ],
       ),
       body: MdSoftGoogleMapUserPickLocationFromScroll(
+        config: const MdUserPickLocationGoogleMapConfig(
+          apiKey: 'ApiKey',
+          baseUrl: 'http://192.168.1.61:1210/api/',
+          searchGovernorate: true,
+          governorateEndpoint: 'governorates/me',
+        ).copyWith(fontFamily: 'Hanimation'),
         isUser: true,
         mapStyle: 'assets/json/map_style.json',
         isStart: true,

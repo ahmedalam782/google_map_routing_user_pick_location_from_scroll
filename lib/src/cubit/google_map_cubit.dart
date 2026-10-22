@@ -12,7 +12,7 @@ import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/plac
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/places_model/prediction.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/repositories/google_map_repo.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/utils/extension.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 part 'google_map_state.dart';
@@ -54,7 +54,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       mapState = MapState.loading;
       emit(GetCurrentLocationLoadingState());
       Future.delayed(const Duration(seconds: 5));
-      final Position locationData = await locationService.getLocation();
+      final LocationData locationData = await locationService.getLocation();
       currentLocationLatLang = LatLng(
         locationData.latitude,
         locationData.longitude,
@@ -373,7 +373,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       if (internal) {
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
-              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
+              errorMessage: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± Ù„ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ù†Ø·Ù‚Ø©'));
           return;
         }
 
@@ -385,13 +385,13 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         } else {
           emit(GetPlaceDetailsErrorState(
               errorMessage:
-                  'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية'));
+                  'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…ÙˆÙ‚Ø¹ Ø¯Ø§Ø®Ù„ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©ØŒ Ø­ÙŠØ« Ø£Ù† Ù‡Ø°Ù‡ Ø±Ø­Ù„Ø© Ø¯Ø§Ø®Ù„ÙŠØ©'));
           return;
         }
       } else {
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
-              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
+              errorMessage: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± Ù„ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ù†Ø·Ù‚Ø©'));
           return;
         }
 
@@ -401,7 +401,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         if (inside) {
           emit(GetPlaceDetailsErrorState(
               errorMessage:
-                  'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
+                  'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…ÙˆÙ‚Ø¹ Ø®Ø§Ø±Ø¬ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©ØŒ Ø­ÙŠØ« Ø£Ù† Ù‡Ø°Ù‡ Ø±Ø­Ù„Ø© Ø®Ø§Ø±Ø¬ÙŠØ©'));
           return;
         } else {
           _onSearchAdd(r);

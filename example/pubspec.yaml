@@ -17,7 +17,7 @@ dependencies:
   cupertino_icons: ^2.0.0
   flutter:
     sdk: flutter
-  google_maps_flutter: ^2.17.1
+  google_maps_flutter: ^2.19.0
   mdsoft_google_map_user_pick_location_from_scroll:
     path: ../
   permission_handler: ^13.0.2

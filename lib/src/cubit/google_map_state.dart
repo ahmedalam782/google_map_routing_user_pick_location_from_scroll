@@ -26,6 +26,8 @@ class GetPredictionsErrorState extends GoogleMapState {
   GetPredictionsErrorState({required this.errorMessage});
 }
 
+class GetPredictionsLoadingState extends GoogleMapState {}
+
 class GetPredictionsSuccessState extends GoogleMapState {}
 
 class GetPlaceDetailsSuccessState extends GoogleMapState {}
@@ -47,6 +49,8 @@ class GetGovernoratesLoadingState extends GoogleMapState {}
 class GetGovernoratesSuccessState extends GoogleMapState {}
 
 class SelectedLocationNameState extends GoogleMapState {}
+
+class OutsideIraqState extends GoogleMapState {}
 
 class GetGovernoratesErrorState extends GoogleMapState {
   String errorMessage;

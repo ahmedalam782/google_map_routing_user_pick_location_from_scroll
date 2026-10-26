@@ -17,12 +17,13 @@ dependencies:
   flutter_bloc: ^9.1.1
   flutter_svg: ^2.3.0
   google_maps_flutter: ^2.19.0
-  toastification: ^3.2.0
+  toastification: ^4.0.0
+  shimmer: ^4.0.0
   uuid: ^4.6.0
   maps_toolkit: ^3.1.0
   modal_progress_hud_nsn: ^0.5.1
   plugin_platform_interface: ^2.1.8
-  web: ^1.1.1
+  web: ^1.1.2
   flutter_web_plugins:
     sdk: flutter
   location: ^10.0.2

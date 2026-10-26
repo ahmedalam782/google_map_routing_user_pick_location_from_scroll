@@ -265,6 +265,25 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     return null;
   }
 
+  final Map<String, PlaceNameResult> _placeNameCache = {};
+
+  /// Whether the selected point is in Iraq; null while it is still unknown.
+  bool? isInIraq;
+
+  /// Google title (cached per ~11 m cell), falling back to OSM.
+  Future<PlaceNameResult> _placeName(double lat, double lng) async {
+    final cell = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
+    final cached = _placeNameCache[cell];
+    if (cached != null) return cached;
+    final result = await googleMapRepoImpl.getPlaceName(lat: lat, lng: lng);
+    final found = result.fold<PlaceNameResult?>((_) => null, (r) => r);
+    if (found != null) {
+      _placeNameCache[cell] = found; // never cache failures
+      return found;
+    }
+    return (name: await getPlaceNameOSM(lat, lng), countryCode: null);
+  }
+
   LatLng? selectedLocation;
   String? locationName;
   Timer? _placeNameTimer;
@@ -273,6 +292,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
 
   Future<void> selectedPlaceName(LatLng latLng) {
     final token = ++_placeNameToken;
+    isInIraq = null; // unknown until this point is named
     _placeNameTimer?.cancel();
     final previous = _placeNameDone;
     if (previous != null && !previous.isCompleted) {
@@ -283,16 +303,18 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     _placeNameTimer = Timer(const Duration(milliseconds: 600), () async {
       try {
         if (token != _placeNameToken || isClosed) return;
-        final address =
-            await getPlaceNameOSM(latLng.latitude, latLng.longitude);
+        final place = await _placeName(latLng.latitude, latLng.longitude);
         if (token != _placeNameToken || isClosed) return;
-        locationName = address;
-        searchController.text = address;
+        locationName = place.name;
+        isInIraq = place.countryCode == null ? null : place.countryCode == 'IQ';
+        searchController.text = place.name;
         emit(SelectedLocationNameState());
+        if (isInIraq == false) emit(OutsideIraqState());
       } catch (error) {
         if (token != _placeNameToken || isClosed) return;
         debugPrint('Error in selectedPlaceName: $error');
         locationName = 'Unknown';
+        isInIraq = null;
         searchController.text = locationName!;
         emit(SelectedLocationNameState());
       } finally {
@@ -320,6 +342,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   void clear() {
     searchController.clear();
     predictions = [];
+    isLoadingPredictions = false;
     sessionToken = null;
     emit(ClearState());
   }
@@ -328,6 +351,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Uuid uuid = const Uuid();
   String? sessionToken;
   List<Prediction> predictions = [];
+  bool isLoadingPredictions = false;
   TextEditingController searchController = TextEditingController();
   Future<void> getPredictions() async {
     if (searchController.text.isEmpty) {
@@ -336,11 +360,14 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       return;
     }
     sessionToken ??= uuid.v4();
+    isLoadingPredictions = true;
+    emit(GetPredictionsLoadingState());
     final result = await googleMapRepoImpl.getPredictions(
         input: searchController.text, sessionToken: sessionToken!);
+    isLoadingPredictions = false;
     result.fold((l) => emit(GetPredictionsErrorState(errorMessage: l.message)),
         (r) {
-      predictions = r.predictions!;
+      predictions = r.predictions ?? [];
       emit(GetPredictionsSuccessState());
     });
   }
@@ -361,7 +388,8 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     bool internal = false,
     bool isStart = false,
   }) async {
-    final result = await googleMapRepoImpl.getPlaceDetails(placeId: placeId);
+    final result = await googleMapRepoImpl.getPlaceDetails(
+        placeId: placeId, sessionToken: sessionToken);
     result.fold((l) {
       emit(GetPlaceDetailsErrorState(errorMessage: l.message));
     }, (r) async {

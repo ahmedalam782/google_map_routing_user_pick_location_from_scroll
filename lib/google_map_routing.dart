@@ -9,6 +9,7 @@ import '../src/utils/constants.dart';
 import '../src/services/toastification_widget.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../src/widgets/custom_button.dart';
+import '../src/widgets/places_shimmer.dart';
 import '../src/widgets/custom_textformfield.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 export '../src/cubit/google_map_cubit.dart';
@@ -55,6 +56,12 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
           if (state is GetPlaceDetailsErrorState) {
             showToastificationWidget(
               message: state.errorMessage,
+              context: context,
+            );
+          }
+          if (state is OutsideIraqState) {
+            showToastificationWidget(
+              message: 'يرجى اختيار موقع داخل العراق',
               context: context,
             );
           }
@@ -145,6 +152,15 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                     const SizedBox(height: 10),
                     CustomButton(
                         onTap: () async {
+                          if (cubit.isInIraq != true) {
+                            showToastificationWidget(
+                              message: cubit.isInIraq == false
+                                  ? 'يرجى اختيار موقع داخل العراق'
+                                  : 'جاري التحقق من الموقع، يرجى الانتظار',
+                              context: context,
+                            );
+                            return;
+                          }
                           if (internal) {
                             bool inSide = cubit
                                 .chackInternalOrNot(cubit.selectedLocation!);
@@ -257,7 +273,7 @@ class SearchTextFormFeild extends StatelessWidget {
     void Function(String?)? onSearchChanged(String? query) {
       if (debounce?.isActive ?? false) debounce?.cancel();
       debounce = Timer(
-        const Duration(milliseconds: 150),
+        const Duration(milliseconds: 400),
         () {
           if (query != null && query.isNotEmpty) {
             cubit.getPredictions();
@@ -303,6 +319,9 @@ class PlacesListWidget extends StatelessWidget {
     return BlocBuilder<GoogleMapCubit, GoogleMapState>(
       builder: (context, state) {
         var cubit = context.read<GoogleMapCubit>();
+        if (cubit.isLoadingPredictions && cubit.predictions.isEmpty) {
+          return const PlacesShimmer();
+        }
         return ListView.builder(
             shrinkWrap: true,
             padding: EdgeInsets.zero,

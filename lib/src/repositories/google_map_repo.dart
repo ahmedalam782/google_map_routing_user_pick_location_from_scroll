@@ -5,6 +5,9 @@ import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/geom
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/place_details_model/place_details_model.dart';
 import 'package:mdsoft_google_map_user_pick_location_from_scroll/src/models/places_model/places_model.dart';
 
+/// A readable title plus the ISO country code of the point (null if unknown).
+typedef PlaceNameResult = ({String name, String? countryCode});
+
 abstract class GoogleMapRepo {
   Future<Either<Failure, PlacesModel>> getPredictions({
     required String input,
@@ -12,6 +15,11 @@ abstract class GoogleMapRepo {
   });
   Future<Either<Failure, PlaceDetailsModel>> getPlaceDetails({
     required String placeId,
+    String? sessionToken,
+  });
+  Future<Either<Failure, PlaceNameResult>> getPlaceName({
+    required double lat,
+    required double lng,
   });
   Future<Either<Failure, RegionModel>> getGovernorate({
     required LatLng currentLocation,

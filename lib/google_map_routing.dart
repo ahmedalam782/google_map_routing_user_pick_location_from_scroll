@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -147,6 +148,20 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!_isPhone) ...[
+                      ZoomButton(
+                        icon: Icons.add,
+                        onPressed: () => cubit.googleMapController
+                            ?.animateCamera(CameraUpdate.zoomIn()),
+                      ),
+                      const SizedBox(height: 10),
+                      ZoomButton(
+                        icon: Icons.remove,
+                        onPressed: () => cubit.googleMapController
+                            ?.animateCamera(CameraUpdate.zoomOut()),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     UserFloatingActionButton(
                         bottomPadding: bottomPadding, cubit: cubit),
                     const SizedBox(height: 10),
@@ -208,6 +223,33 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Phones have pinch-to-zoom, so the zoom buttons are only for web/desktop.
+bool get _isPhone =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS);
+
+class ZoomButton extends StatelessWidget {
+  const ZoomButton({super.key, required this.icon, required this.onPressed});
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton.small(
+      heroTag: null,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(50)),
+        side: BorderSide(color: Colors.transparent),
+      ),
+      elevation: 1,
+      backgroundColor: Colors.white,
+      onPressed: onPressed,
+      child: Icon(icon, color: MdUserPickLocationGoogleMapConfig.primaryColor),
     );
   }
 }

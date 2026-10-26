@@ -401,7 +401,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       if (internal) {
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
-              errorMessage: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± Ù„ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ù†Ø·Ù‚Ø©'));
+              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
           return;
         }
 
@@ -413,13 +413,13 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         } else {
           emit(GetPlaceDetailsErrorState(
               errorMessage:
-                  'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…ÙˆÙ‚Ø¹ Ø¯Ø§Ø®Ù„ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©ØŒ Ø­ÙŠØ« Ø£Ù† Ù‡Ø°Ù‡ Ø±Ø­Ù„Ø© Ø¯Ø§Ø®Ù„ÙŠØ©'));
+                  'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية'));
           return;
         }
       } else {
         if (regionModel == null) {
           emit(GetPlaceDetailsErrorState(
-              errorMessage: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± Ù„ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ù†Ø·Ù‚Ø©'));
+              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
           return;
         }
 
@@ -429,7 +429,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         if (inside) {
           emit(GetPlaceDetailsErrorState(
               errorMessage:
-                  'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…ÙˆÙ‚Ø¹ Ø®Ø§Ø±Ø¬ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©ØŒ Ø­ÙŠØ« Ø£Ù† Ù‡Ø°Ù‡ Ø±Ø­Ù„Ø© Ø®Ø§Ø±Ø¬ÙŠØ©'));
+                  'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
           return;
         } else {
           _onSearchAdd(r);

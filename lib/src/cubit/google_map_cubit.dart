@@ -470,16 +470,33 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     placeDetailsLocation = LatLng(
         r.result!.geometry!.location!.lat!, r.result!.geometry!.location!.lng!);
 
-    googleMapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(
-        LatLng(
-          placeDetailsLocation.latitude,
-          placeDetailsLocation.longitude,
+    final title = r.result?.name ?? r.result?.formattedAddress;
+    markers.removeWhere((marker) => marker.markerId.value == 'searchedPlace');
+    if (title != null && title.isNotEmpty) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('searchedPlace'),
+          position: placeDetailsLocation,
+          infoWindow: InfoWindow(title: title),
+          alpha: 0.9,
         ),
-        16,
-      ),
+      );
+    }
+
+    // Not awaited: on web the animation future can stall and block the zoom.
+    googleMapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(placeDetailsLocation, 16),
     );
-    clear();
+    clear(); // also emits, rebuilding the map with the new marker
+    if (title != null && title.isNotEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      try {
+        await googleMapController
+            ?.showMarkerInfoWindow(const MarkerId('searchedPlace'));
+      } catch (e) {
+        debugPrint('showMarkerInfoWindow failed: $e');
+      }
+    }
   }
 
   RegionModel? regionModel;

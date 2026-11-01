@@ -57,7 +57,7 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
           'place_id': placeId,
           if (sessionToken != null) 'sessiontoken': sessionToken,
           'language': 'ar',
-          'fields': 'geometry',
+          'fields': 'geometry,name,formatted_address',
           'key': apiKey,
         },
       );

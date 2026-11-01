@@ -485,7 +485,9 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
 
     // Not awaited: on web the animation future can stall and block the zoom.
     googleMapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(placeDetailsLocation, 16),
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: placeDetailsLocation, zoom: 16),
+      ),
     );
     clear(); // also emits, rebuilding the map with the new marker
     if (title != null && title.isNotEmpty) {

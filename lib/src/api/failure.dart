@@ -12,43 +12,42 @@ class ServerFailure extends Failure {
   factory ServerFailure.fromDioError(DioException e) {
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
-        return ServerFailure('Connection timeout with api server');
+        return ServerFailure('انتهت مهلة الاتصال بالخادم');
       case DioExceptionType.sendTimeout:
-        return ServerFailure('Send timeout with ApiServer');
+        return ServerFailure('انتهت مهلة إرسال الطلب إلى الخادم');
       case DioExceptionType.receiveTimeout:
-        return ServerFailure('Receive timeout with ApiServer');
+        return ServerFailure('انتهت مهلة استقبال الرد من الخادم');
       case DioExceptionType.badCertificate:
-        return ServerFailure('badCertificate with api server');
+        return ServerFailure('شهادة الأمان الخاصة بالخادم غير صالحة');
       case DioExceptionType.badResponse:
         return ServerFailure.fromResponse(
-            e.response!.statusCode!, e.response?.data!);
+            e.response!.statusCode!, e.response?.data);
       case DioExceptionType.cancel:
-        return ServerFailure('Request to ApiServer was canceld');
+        return ServerFailure('تم إلغاء الطلب');
       case DioExceptionType.connectionError:
-        return ServerFailure('No Internet Connection');
+        return ServerFailure('لا يوجد اتصال بالإنترنت');
       case DioExceptionType.unknown:
-        ServerFailure('Unknown error: ${e.message}');
-        if (e.error != null) {
-          ServerFailure('Error details: ${e.error}');
-        }
-        return ServerFailure('Opps There was an Error, Please try again');
+        return ServerFailure('حدث خطأ ما، يرجى المحاولة مرة أخرى');
       case DioExceptionType.transformTimeout:
-        return ServerFailure('Transform timeout with ApiServer');
+        return ServerFailure('انتهت مهلة معالجة البيانات');
     }
   }
 
   factory ServerFailure.fromResponse(int statusCode, dynamic response) {
     if (statusCode == 404) {
-      return ServerFailure('Your request was not found, please try later');
+      return ServerFailure('لم يتم العثور على الطلب، يرجى المحاولة لاحقاً');
     } else if (statusCode == 400 ||
         statusCode == 401 ||
         statusCode == 403 ||
         statusCode == 406 ||
         statusCode == 500) {
+      final message = response is Map
+          ? (response['Message'] ?? response['message'] ?? response['error'])
+          : null;
       return ServerFailure(
-          response['Message'] ?? response['message'] ?? response['error']);
+          message?.toString() ?? 'حدث خطأ، يرجى المحاولة مرة أخرى');
     } else {
-      return ServerFailure('There was an error , please try again');
+      return ServerFailure('حدث خطأ، يرجى المحاولة مرة أخرى');
     }
   }
 }

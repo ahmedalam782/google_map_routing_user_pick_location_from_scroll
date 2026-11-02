@@ -36,12 +36,12 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       if (response.statusCode == 200) {
         return Right(PlacesModel.fromJson(response.data));
       } else {
-        return Left(ServerFailure(response.statusMessage ?? ''));
+        return Left(ServerFailure('حدث خطأ، يرجى المحاولة مرة أخرى'));
       }
     } on DioException catch (e) {
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
     }
   }
 
@@ -64,12 +64,12 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       if (response.statusCode == 200) {
         return Right(PlaceDetailsModel.fromJson(response.data));
       } else {
-        return Left(ServerFailure(response.statusMessage ?? ''));
+        return Left(ServerFailure('حدث خطأ، يرجى المحاولة مرة أخرى'));
       }
     } on DioException catch (e) {
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
     }
   }
 
@@ -91,16 +91,15 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       );
       final data = response.data;
       if (data is! Map<String, dynamic> || data['status'] != 'OK') {
-        return Left(ServerFailure(
-            'Geocode status: ${data is Map ? data['status'] : data.runtimeType}'));
+        return Left(ServerFailure('تعذر تحديد اسم الموقع'));
       }
       final line = geocodeAddressLine(data, nearby: await nearby).trim();
-      if (line.isEmpty) return Left(ServerFailure('Geocode gave no name'));
+      if (line.isEmpty) return Left(ServerFailure('تعذر تحديد اسم الموقع'));
       return Right((name: line, countryCode: _countryCode(data)));
     } on DioException catch (e) {
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
     }
   }
 
@@ -158,9 +157,12 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       return Right(RegionModel.fromJson(response.data));
     } on DioException catch (e) {
       debugPrint('Error getting governorate: ${e.message}');
+      if (e.response?.statusCode == 404) {
+        return Left(ServerFailure('يرجى اختيار موقع داخل العراق'));
+      }
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
     }
   }
 }

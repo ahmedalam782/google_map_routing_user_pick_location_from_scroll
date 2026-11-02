@@ -73,7 +73,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
           ),
         );
       } else {
-        emit(GetLocationErrorState(errorMessage: 'Cubit is closed.'));
+        emit(GetLocationErrorState(errorMessage: 'حدث خطأ غير متوقع'));
         return;
       }
       updateCurrentLocationMarker();
@@ -84,19 +84,19 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     } on LocationServiceException catch (_) {
       mapState = MapState.error;
       emit(GetLocationErrorState(
-          errorMessage: 'Please Check your location Serveice  '));
+          errorMessage: 'يرجى التأكد من تفعيل خدمة الموقع'));
     } on LocationPermissionException catch (_) {
       mapState = MapState.error;
       emit(GetLocationErrorState(
-          errorMessage: 'Please Check your  Location Permission '));
-    } on PlatformException catch (e) {
+          errorMessage: 'يرجى التأكد من السماح بالوصول إلى الموقع'));
+    } on PlatformException catch (_) {
       mapState = MapState.error;
       emit(GetLocationErrorState(
-          errorMessage: 'Get Location Failed: ${e.message ?? e.toString()}'));
+          errorMessage: 'فشل في تحديد الموقع، يرجى المحاولة مرة أخرى'));
     } catch (e) {
       mapState = MapState.error;
       emit(GetLocationErrorState(
-          errorMessage: 'An unexpected location error occurred.'));
+          errorMessage: 'حدث خطأ غير متوقع أثناء تحديد الموقع'));
     }
   }
 

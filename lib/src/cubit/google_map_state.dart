@@ -50,6 +50,8 @@ class GetGovernoratesSuccessState extends GoogleMapState {}
 
 class SelectedLocationNameState extends GoogleMapState {}
 
+class ResolvingLocationNameState extends GoogleMapState {}
+
 class OutsideIraqState extends GoogleMapState {}
 
 class GetGovernoratesErrorState extends GoogleMapState {

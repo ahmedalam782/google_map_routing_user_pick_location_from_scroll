@@ -102,8 +102,11 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                       oldLocation: oldLocation,
                     ),
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.only(start: 9, top: 16),
+                      padding: const EdgeInsetsDirectional.only(
+                        start: 16,
+                        end: 16,
+                        top: 16,
+                      ),
                       child: SearchTextFormFeild(
                         width: width,
                         internal: internal,
@@ -111,22 +114,26 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                       ),
                     ),
                     Center(
-                      child: Image.asset(
-                          isStart ? AppImages.point : AppImages.endLocation),
+                      child: IgnorePointer(
+                        child: Image.asset(
+                            isStart ? AppImages.point : AppImages.endLocation),
+                      ),
                     ),
-                    Positioned.fill(
-                      top: 80,
-                      right: 16,
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        child: SizedBox(
-                          width: width / 1.2,
+                    if (cubit.isLoadingPredictions ||
+                        cubit.predictions.isNotEmpty)
+                      Positioned(
+                        top: 76,
+                        right: 16,
+                        left: 16,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+                          ),
                           child: Material(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(16),
-                              topRight: Radius.circular(16),
-                            ),
+                            color: Colors.white.withValues(alpha: 0.96),
+                            elevation: 4,
+                            shadowColor: Colors.black26,
+                            borderRadius: BorderRadius.circular(16),
                             clipBehavior: Clip.antiAlias,
                             child: PlacesListWidget(
                               internal: internal,
@@ -135,7 +142,6 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -167,53 +173,61 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                     const SizedBox(height: 10),
                     CustomButton(
                         onTap: () async {
-                          if (cubit.isInIraq != true) {
+                          final loc = cubit.selectedLocation;
+                          if (loc == null) return;
+                          final inIraq =
+                              cubit.isInIraq ?? cubit.isPointInIraqSync(loc);
+                          if (!inIraq) {
                             showToastificationWidget(
-                              message: cubit.isInIraq == false
-                                  ? 'يرجى اختيار موقع داخل العراق'
-                                  : 'جاري التحقق من الموقع، يرجى الانتظار',
+                              message: 'يرجى اختيار موقع داخل العراق',
                               context: context,
                             );
                             return;
                           }
                           if (internal) {
-                            bool inSide = cubit
-                                .chackInternalOrNot(cubit.selectedLocation!);
-                            if (inSide) {
-                              selectedPlace.call(MdOnUserSelectedPlace(
-                                selectedLocation: cubit.selectedLocation!,
-                                pointName: cubit.locationName ?? '',
-                              ));
-                            } else {
+                            if (cubit.regionModel != null &&
+                                !cubit.chackInternalOrNot(loc)) {
                               showToastificationWidget(
                                 message:
                                     'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية',
                                 context: context,
                               );
-                            }
-                          } else {
-                            if (isStart) {
-                              selectedPlace.call(MdOnUserSelectedPlace(
-                                selectedLocation: cubit.selectedLocation!,
-                                pointName: cubit.locationName ?? '',
-                              ));
                               return;
                             }
-                            bool inSide = cubit
-                                .chackInternalOrNot(cubit.selectedLocation!);
-                            if (inSide) {
+                          } else if (!isStart) {
+                            if (cubit.regionModel != null &&
+                                cubit.chackInternalOrNot(loc)) {
                               showToastificationWidget(
                                 message:
                                     'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية',
                                 context: context,
                               );
-                            } else {
-                              selectedPlace.call(MdOnUserSelectedPlace(
-                                selectedLocation: cubit.selectedLocation!,
-                                pointName: cubit.locationName ?? '',
-                              ));
+                              return;
                             }
                           }
+                          if (cubit.isResolvingPlaceName ||
+                              (cubit.locationName == null ||
+                                  cubit.locationName!.trim().isEmpty)) {
+                            await cubit
+                                .ensurePlaceResolved()
+                                .timeout(
+                                  const Duration(milliseconds: 900),
+                                  onTimeout: () {},
+                                );
+                          }
+                          final finalLoc = cubit.selectedLocation ?? loc;
+                          final finalName =
+                              (cubit.locationName?.trim().isNotEmpty == true)
+                                  ? cubit.locationName!.trim()
+                                  : (cubit.searchController.text
+                                              .trim()
+                                              .isNotEmpty
+                                          ? cubit.searchController.text.trim()
+                                          : 'موقع على الخريطة');
+                          selectedPlace.call(MdOnUserSelectedPlace(
+                            selectedLocation: finalLoc,
+                            pointName: finalName,
+                          ));
                         },
                         text: 'تثبيت النقطة'),
                   ],
@@ -273,13 +287,17 @@ class UserFloatingActionButton extends StatelessWidget {
       elevation: 1,
       backgroundColor: Colors.white,
       onPressed: () {
+        final target = cubit.currentLocationLatLang ?? cubit.selectedLocation;
+        if (target == null) return;
         cubit.googleMapController?.animateCamera(CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: cubit.currentLocationLatLang!,
+            target: target,
             zoom: 16,
           ),
         ));
-        cubit.updateCurrentLocationMarker();
+        if (cubit.currentLocationLatLang != null) {
+          cubit.updateCurrentLocationMarker();
+        }
       },
       child: SizedBox(
         height: 46,
@@ -310,41 +328,54 @@ class SearchTextFormFeild extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Timer? debounce;
-
-    void Function(String?)? onSearchChanged(String? query) {
-      if (debounce?.isActive ?? false) debounce?.cancel();
-      debounce = Timer(
-        const Duration(milliseconds: 400),
-        () {
-          if (query != null && query.isNotEmpty) {
-            cubit.getPredictions();
-          } else {
-            cubit.clear();
-          }
-        },
-      );
-      return null;
-    }
-
     return BlocBuilder<GoogleMapCubit, GoogleMapState>(
-        builder: (context, state) {
-      return SizedBox(
-        width: width / 1.2,
-        child: CustomTextFormFeild(
-          focusNode: cubit.searchFocusNode,
-          controller: cubit.searchController,
-          label: 'الى اين تود الذهاب؟...',
-          onChange: onSearchChanged,
-          prefixIcon: SvgPicture.asset(
-            AppImages.search,
-            height: 20,
-            width: 20,
-            fit: BoxFit.scaleDown,
-          ),
-        ),
-      );
-    });
+      builder: (context, state) {
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: cubit.searchController,
+          builder: (context, value, _) {
+            final hasText = value.text.isNotEmpty;
+            return SizedBox(
+              width: double.infinity,
+              child: CustomTextFormFeild(
+                focusNode: cubit.searchFocusNode,
+                controller: cubit.searchController,
+                haveShadow: true,
+                label: 'الى اين تود الذهاب؟...',
+                onTap: () {
+                  if (cubit.searchController.text.isNotEmpty &&
+                      cubit.searchController.text == cubit.locationName) {
+                    cubit.searchController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: cubit.searchController.text.length,
+                    );
+                  }
+                },
+                onChange: (val) => cubit.onSearchChanged(val),
+                prefixIcon: SvgPicture.asset(
+                  AppImages.search,
+                  height: 20,
+                  width: 20,
+                  fit: BoxFit.scaleDown,
+                ),
+                suffixIconButton: hasText
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Color(0xff606060),
+                        ),
+                        onPressed: () {
+                          cubit.clear();
+                          cubit.searchFocusNode.requestFocus();
+                        },
+                      )
+                    : null,
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -364,40 +395,81 @@ class PlacesListWidget extends StatelessWidget {
         if (cubit.isLoadingPredictions && cubit.predictions.isEmpty) {
           return const PlacesShimmer();
         }
-        return ListView.builder(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            itemBuilder: (context, index) => Material(
-                  type: MaterialType.transparency,
-                  child: ListTile(
-                    onTap: () async {
-                      await cubit.getPlaceDetails(
-                          placeId: cubit.predictions[index].placeId!,
-                          internal: internal,
-                          isStart: isStart);
-                      if (context.mounted) {
-                        FocusScope.of(context).unfocus();
-                      }
-                    },
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                    ),
-                    leading: SvgPicture.asset(
-                      AppImages.clock,
-                      height: 20,
-                      width: 20,
-                      fit: BoxFit.scaleDown,
-                    ),
-                    title: Text(cubit.predictions[index].description!),
-                    trailing: SvgPicture.asset(
-                      AppImages.frame,
-                      height: 20,
-                      width: 20,
-                      fit: BoxFit.scaleDown,
-                    ),
+        return ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: cubit.predictions.length,
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            thickness: 0.6,
+            color: Colors.grey.shade200,
+          ),
+          itemBuilder: (context, index) {
+            final prediction = cubit.predictions[index];
+            final mainText =
+                prediction.structuredFormatting?.mainText?.trim() ??
+                    prediction.description ??
+                    '';
+            final secondaryText =
+                prediction.structuredFormatting?.secondaryText?.trim();
+            return Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                dense: true,
+                onTap: () async {
+                  FocusScope.of(context).unfocus();
+                  await cubit.getPlaceDetails(
+                    placeId: prediction.placeId!,
+                    fallbackTitle: prediction.description ?? mainText,
+                    internal: internal,
+                    isStart: isStart,
+                  );
+                },
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                leading: SvgPicture.asset(
+                  AppImages.clock,
+                  height: 20,
+                  width: 20,
+                  fit: BoxFit.scaleDown,
+                ),
+                title: Text(
+                  mainText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xff242021),
+                    fontFamily: MdUserPickLocationGoogleMapConfig.fontFamily,
                   ),
                 ),
-            itemCount: cubit.predictions.length);
+                subtitle:
+                    (secondaryText != null && secondaryText.isNotEmpty)
+                        ? Text(
+                            secondaryText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: const Color(0xff606060),
+                              fontFamily:
+                                  MdUserPickLocationGoogleMapConfig.fontFamily,
+                            ),
+                          )
+                        : null,
+                trailing: SvgPicture.asset(
+                  AppImages.frame,
+                  height: 20,
+                  width: 20,
+                  fit: BoxFit.scaleDown,
+                ),
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -427,10 +499,19 @@ class GoogleMapWidget extends StatefulWidget {
 }
 
 class _GoogleMapWidgetState extends State<GoogleMapWidget> {
-  LatLng location = const LatLng(35.27088501447092, 46.055900529026985);
+  late LatLng location = widget.oldLocation ??
+      widget.startLocation ??
+      const LatLng(33.3152, 44.3661);
+  bool _hasMovedCamera = false;
 
   @override
   Widget build(BuildContext context) {
+    final initialTarget = widget.oldLocation ??
+        widget.startLocation ??
+        widget.cubit.selectedLocation ??
+        const LatLng(33.3152, 44.3661);
+    final initialZoom = (!widget.internal && !widget.isStart) ? 9.0 : 16.0;
+
     return GoogleMap(
       markers: widget.cubit.markers,
       polylines: widget.cubit.polyLines,
@@ -439,29 +520,40 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
       myLocationButtonEnabled: false,
       rotateGesturesEnabled: false,
       compassEnabled: false,
-      initialCameraPosition: widget.cubit.cameraPosition,
+      initialCameraPosition: CameraPosition(
+        target: initialTarget,
+        zoom: initialZoom,
+      ),
       myLocationEnabled: false,
       onCameraMove: (position) {
-        setState(() {
-          location = position.target;
-        });
+        _hasMovedCamera = true;
+        location = position.target;
+        widget.cubit.selectedLocation = location;
+        widget.cubit.isInIraq = widget.cubit.isPointInIraqSync(location);
       },
       onCameraIdle: () {
-        setState(() {
-          widget.cubit.selectedLocation = location;
-        });
+        if (!_hasMovedCamera && widget.cubit.selectedLocation == null) {
+          return;
+        }
+        final target =
+            _hasMovedCamera ? location : (widget.cubit.selectedLocation ?? location);
+        widget.cubit.selectedLocation = target;
+        widget.cubit.isInIraq = widget.cubit.isPointInIraqSync(target);
+
+        if (widget.cubit.isNextCameraIdleFromSearch) {
+          widget.cubit.isNextCameraIdleFromSearch = false;
+          return;
+        }
+
         if (widget.internal) {
           if (widget.cubit.regionModel == null) {
-            // showToastificationWidget(
-            //   message: 'الرجاء الانتظار لتحميل بيانات المنطقة',
-            //   context: context,
-            // );
+            widget.cubit.selectedPlaceName(target);
             return;
           }
 
-          bool inSide = widget.cubit.chackInternalOrNot(location);
+          bool inSide = widget.cubit.chackInternalOrNot(target);
           if (inSide) {
-            widget.cubit.selectedPlaceName(location);
+            widget.cubit.selectedPlaceName(target);
           } else {
             showToastificationWidget(
               message:
@@ -471,13 +563,14 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
           }
         } else {
           if (widget.isStart) {
-            widget.cubit.selectedPlaceName(location);
+            widget.cubit.selectedPlaceName(target);
             return;
           }
           if (widget.cubit.regionModel == null) {
+            widget.cubit.selectedPlaceName(target);
             return;
           }
-          bool inSide = widget.cubit.chackInternalOrNot(location);
+          bool inSide = widget.cubit.chackInternalOrNot(target);
           if (inSide) {
             showToastificationWidget(
               message:
@@ -485,20 +578,32 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
               context: context,
             );
           } else {
-            widget.cubit.selectedPlaceName(location);
+            widget.cubit.selectedPlaceName(target);
           }
         }
       },
       onMapCreated: (GoogleMapController controller) async {
         widget.cubit.googleMapController = controller;
-        widget.cubit.getMapStyle(mapStyle: widget.mapStyle!);
+        if (widget.mapStyle != null) {
+          widget.cubit.getMapStyle(mapStyle: widget.mapStyle!);
+        }
 
-        await widget.cubit.getLocationMyCurrentLocation(
-          startLocation: widget.startLocation,
-          isStart: widget.isStart,
-          internal: widget.internal,
-          oldLocation: widget.oldLocation,
-        );
+        await Future.wait([
+          widget.cubit.getLocationMyCurrentLocation(
+            startLocation: widget.startLocation,
+            isStart: widget.isStart,
+            internal: widget.internal,
+            oldLocation: widget.oldLocation,
+          ),
+          if (widget.cubit.regionModel == null &&
+              (widget.startLocation != null || widget.oldLocation != null))
+            widget.cubit.getGovernorates(
+              startLocation: widget.startLocation ?? widget.oldLocation,
+              internal: widget.internal,
+              isStart: widget.isStart,
+            ),
+        ]);
+
         if (widget.cubit.regionModel == null) {
           await widget.cubit.getGovernorates(
             startLocation: widget.startLocation,

@@ -44,6 +44,19 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     }
   }
 
+  @override
+  Future<void> close() {
+    _placeNameTimer?.cancel();
+    _placeNameCancelToken?.cancel();
+    _searchDebounceTimer?.cancel();
+    _predictionsCancelToken?.cancel();
+    searchFocusNode.dispose();
+    searchController.dispose();
+    return super.close();
+  }
+
+  static LatLng? _lastKnownLocation;
+
 //? getLocation
   Future<void> getLocationMyCurrentLocation(
       {LatLng? startLocation,
@@ -51,23 +64,51 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       bool isStart = false,
       bool internal = false}) async {
     try {
+      final immediateTarget =
+          oldLocation ?? startLocation ?? _lastKnownLocation;
+      if (immediateTarget != null) {
+        currentLocation = oldLocation ?? immediateTarget;
+        currentLocationLatLang ??= _lastKnownLocation ?? immediateTarget;
+        selectedLocation = currentLocation;
+        final initialCam = (!internal && !isStart)
+            ? CameraPosition(target: currentLocation, zoom: 9)
+            : CameraPosition(target: currentLocation, zoom: 17);
+        googleMapController?.moveCamera(
+          CameraUpdate.newCameraPosition(initialCam),
+        );
+        selectedPlaceName(currentLocation, debounce: Duration.zero);
+        mapState = MapState.loaded;
+        emit(GetLocationSuccessState());
+
+        // Refresh actual GPS in background if oldLocation wasn't explicitly set
+        locationService.getLocation().then((locationData) {
+          final gps = LatLng(locationData.latitude, locationData.longitude);
+          _lastKnownLocation = gps;
+          currentLocationLatLang = gps;
+          if (!isClosed) {
+            updateCurrentLocationMarker();
+          }
+        }).catchError((_) {});
+        return;
+      }
+
       mapState = MapState.loading;
       emit(GetCurrentLocationLoadingState());
-      Future.delayed(const Duration(seconds: 5));
       final LocationData locationData = await locationService.getLocation();
-      currentLocationLatLang = LatLng(
+      final gps = LatLng(
         locationData.latitude,
         locationData.longitude,
       );
+      _lastKnownLocation = gps;
+      currentLocationLatLang = gps;
 
-      currentLocation = oldLocation ??
-          LatLng(locationData.latitude, locationData.longitude);
+      currentLocation = oldLocation ?? gps;
       var myCameraPosition = (!internal && !isStart)
           ? CameraPosition(target: oldLocation ?? currentLocation, zoom: 9)
           : CameraPosition(target: oldLocation ?? currentLocation, zoom: 17);
       // Check if cubit is closed before animating camera
       if (!isClosed) {
-        await googleMapController?.animateCamera(
+        googleMapController?.animateCamera(
           CameraUpdate.newCameraPosition(
             myCameraPosition,
           ),
@@ -78,7 +119,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       }
       updateCurrentLocationMarker();
       selectedLocation = currentLocation;
-      selectedPlaceName(currentLocation);
+      selectedPlaceName(currentLocation, debounce: Duration.zero);
       mapState = MapState.loaded;
       emit(GetLocationSuccessState());
     } on LocationServiceException catch (_) {
@@ -265,21 +306,65 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     return null;
   }
 
-  final Map<String, PlaceNameResult> _placeNameCache = {};
+  static final Map<String, PlaceNameResult> _placeNameCache = {};
+
+  /// Approximate boundary polygon of Iraq (lat, lng).
+  static const List<mp.LatLng> _iraqBoundary = [
+    mp.LatLng(37.38, 42.35),
+    mp.LatLng(37.15, 44.80),
+    mp.LatLng(35.80, 46.20),
+    mp.LatLng(33.50, 46.15),
+    mp.LatLng(31.00, 47.80),
+    mp.LatLng(29.95, 48.60),
+    mp.LatLng(29.06, 46.55),
+    mp.LatLng(31.90, 39.00),
+    mp.LatLng(32.30, 38.79),
+    mp.LatLng(33.37, 38.80),
+    mp.LatLng(34.40, 41.20),
+    mp.LatLng(36.90, 41.30),
+  ];
+
+  /// Instant offline check whether [latLng] is inside Iraq (or inside the loaded governorate polygon).
+  bool isPointInIraqSync(LatLng latLng) {
+    if (regionModel != null && chackInternalOrNot(latLng)) {
+      return true;
+    }
+    return mp.PolygonUtil.containsLocation(
+      mp.LatLng(latLng.latitude, latLng.longitude),
+      _iraqBoundary,
+      true,
+    );
+  }
 
   /// Whether the selected point is in Iraq; null while it is still unknown.
   bool? isInIraq;
+  bool isResolvingPlaceName = false;
+  CancelToken? _placeNameCancelToken;
 
   /// Google title (cached per ~11 m cell), falling back to OSM.
-  Future<PlaceNameResult> _placeName(double lat, double lng) async {
+  Future<PlaceNameResult> _placeName(
+    double lat,
+    double lng, {
+    CancelToken? cancelToken,
+  }) async {
     final cell = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
     final cached = _placeNameCache[cell];
     if (cached != null) return cached;
-    final result = await googleMapRepoImpl.getPlaceName(lat: lat, lng: lng);
+    final result = await googleMapRepoImpl.getPlaceName(
+      lat: lat,
+      lng: lng,
+      cancelToken: cancelToken,
+    );
     final found = result.fold<PlaceNameResult?>((_) => null, (r) => r);
     if (found != null) {
       _placeNameCache[cell] = found; // never cache failures
       return found;
+    }
+    if (cancelToken?.isCancelled ?? false) {
+      throw DioException.requestCancelled(
+        requestOptions: RequestOptions(path: ''),
+        reason: 'cancelled',
+      );
     }
     return (name: await getPlaceNameOSM(lat, lng), countryCode: null);
   }
@@ -290,38 +375,105 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   int _placeNameToken = 0;
   Completer<void>? _placeNameDone;
 
-  Future<void> selectedPlaceName(LatLng latLng) {
+  Future<void> selectedPlaceName(
+    LatLng latLng, {
+    Duration debounce = const Duration(milliseconds: 120),
+  }) {
     final token = ++_placeNameToken;
-    isInIraq = null; // unknown until this point is named
+    selectedLocation = latLng;
+    isInIraq = isPointInIraqSync(latLng);
     _placeNameTimer?.cancel();
+    _placeNameCancelToken?.cancel();
     final previous = _placeNameDone;
     if (previous != null && !previous.isCompleted) {
       previous.complete();
     }
     final done = Completer<void>();
     _placeNameDone = done;
-    _placeNameTimer = Timer(const Duration(milliseconds: 600), () async {
+
+    final cell =
+        '${latLng.latitude.toStringAsFixed(4)},${latLng.longitude.toStringAsFixed(4)}';
+    final cached = _placeNameCache[cell];
+    if (cached != null) {
+      locationName = cached.name;
+      isInIraq = cached.countryCode == null
+          ? isPointInIraqSync(latLng)
+          : cached.countryCode == 'IQ';
+      isResolvingPlaceName = false;
+      if (!searchFocusNode.hasFocus) {
+        searchController.text = cached.name;
+      }
+      emit(SelectedLocationNameState());
+      if (isInIraq == false) emit(OutsideIraqState());
+      done.complete();
+      return done.future;
+    }
+
+    isResolvingPlaceName = true;
+    emit(ResolvingLocationNameState());
+
+    Future<void> runLookup() async {
+      final cancelToken = CancelToken();
+      _placeNameCancelToken = cancelToken;
       try {
         if (token != _placeNameToken || isClosed) return;
-        final place = await _placeName(latLng.latitude, latLng.longitude);
+        final place = await _placeName(
+          latLng.latitude,
+          latLng.longitude,
+          cancelToken: cancelToken,
+        );
         if (token != _placeNameToken || isClosed) return;
         locationName = place.name;
-        isInIraq = place.countryCode == null ? null : place.countryCode == 'IQ';
-        searchController.text = place.name;
+        isInIraq = place.countryCode == null
+            ? isPointInIraqSync(latLng)
+            : place.countryCode == 'IQ';
+        isResolvingPlaceName = false;
+        if (!searchFocusNode.hasFocus) {
+          searchController.text = place.name;
+        }
         emit(SelectedLocationNameState());
         if (isInIraq == false) emit(OutsideIraqState());
       } catch (error) {
         if (token != _placeNameToken || isClosed) return;
         debugPrint('Error in selectedPlaceName: $error');
-        locationName = 'Unknown';
-        isInIraq = null;
-        searchController.text = locationName!;
+        locationName = locationName?.isNotEmpty == true
+            ? locationName
+            : 'موقع على الخريطة';
+        isInIraq = isPointInIraqSync(latLng);
+        isResolvingPlaceName = false;
+        if (!searchFocusNode.hasFocus) {
+          searchController.text = locationName!;
+        }
         emit(SelectedLocationNameState());
       } finally {
+        if (token == _placeNameToken) {
+          isResolvingPlaceName = false;
+        }
         if (!done.isCompleted) done.complete();
       }
-    });
+    }
+
+    if (debounce == Duration.zero) {
+      runLookup();
+    } else {
+      _placeNameTimer = Timer(debounce, runLookup);
+    }
     return done.future;
+  }
+
+  /// Ensures the current [selectedLocation] has a resolved name (used if the
+  /// user taps confirm immediately while a lookup is still in flight).
+  Future<void> ensurePlaceResolved() async {
+    final loc = selectedLocation;
+    if (loc == null) return;
+    isInIraq ??= isPointInIraqSync(loc);
+    if (!isResolvingPlaceName &&
+        locationName != null &&
+        locationName!.trim().isNotEmpty) {
+      return;
+    }
+    _placeNameTimer?.cancel();
+    await selectedPlaceName(loc, debounce: Duration.zero);
   }
 
   //? updateCurrentLocationMarker
@@ -339,8 +491,12 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     emit(SetMarkersSuccessState());
   }
 
-  void clear() {
-    searchController.clear();
+  void clear({bool keepText = false}) {
+    _predictionsCancelToken?.cancel();
+    _searchDebounceTimer?.cancel();
+    if (!keepText) {
+      searchController.clear();
+    }
     predictions = [];
     isLoadingPredictions = false;
     sessionToken = null;
@@ -353,23 +509,81 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   List<Prediction> predictions = [];
   bool isLoadingPredictions = false;
   TextEditingController searchController = TextEditingController();
-  Future<void> getPredictions() async {
-    if (searchController.text.isEmpty) {
+  Timer? _searchDebounceTimer;
+  CancelToken? _predictionsCancelToken;
+  static final Map<String, List<Prediction>> _predictionsCache = {};
+  int _predictionsToken = 0;
+
+  void onSearchChanged(String? query) {
+    _searchDebounceTimer?.cancel();
+    final trimmed = query?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      _predictionsCancelToken?.cancel();
       predictions = [];
+      isLoadingPredictions = false;
+      emit(ClearState());
+      return;
+    }
+    final cached = _predictionsCache[trimmed];
+    if (cached != null) {
+      _predictionsCancelToken?.cancel();
+      predictions = cached;
+      isLoadingPredictions = false;
       emit(GetPredictionsSuccessState());
       return;
     }
+    _searchDebounceTimer = Timer(
+      const Duration(milliseconds: 220),
+      getPredictions,
+    );
+  }
+
+  Future<void> getPredictions() async {
+    final query = searchController.text.trim();
+    if (query.isEmpty) {
+      predictions = [];
+      isLoadingPredictions = false;
+      emit(GetPredictionsSuccessState());
+      return;
+    }
+    final cached = _predictionsCache[query];
+    if (cached != null) {
+      predictions = cached;
+      isLoadingPredictions = false;
+      emit(GetPredictionsSuccessState());
+      return;
+    }
+    final token = ++_predictionsToken;
+    _predictionsCancelToken?.cancel();
+    final cancelToken = CancelToken();
+    _predictionsCancelToken = cancelToken;
+
     sessionToken ??= uuid.v4();
     isLoadingPredictions = true;
     emit(GetPredictionsLoadingState());
+    final bias = selectedLocation ?? currentLocationLatLang;
     final result = await googleMapRepoImpl.getPredictions(
-        input: searchController.text, sessionToken: sessionToken!);
+      input: query,
+      sessionToken: sessionToken!,
+      locationBias: bias,
+      cancelToken: cancelToken,
+    );
+    if (token != _predictionsToken || isClosed) return;
     isLoadingPredictions = false;
-    result.fold((l) => emit(GetPredictionsErrorState(errorMessage: l.message)),
-        (r) {
-      predictions = r.predictions ?? [];
-      emit(GetPredictionsSuccessState());
-    });
+    result.fold(
+      (l) {
+        if (l.message != 'cancelled') {
+          emit(GetPredictionsErrorState(errorMessage: l.message));
+        }
+      },
+      (r) {
+        predictions = r.predictions ?? [];
+        if (predictions.isNotEmpty) {
+          _predictionsCache[query] = predictions;
+        }
+        emit(GetPredictionsSuccessState());
+      },
+    );
   }
 
 //? getPlaceDetails
@@ -383,57 +597,58 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     emit(SetEditIndexSuccessState());
   }
 
+  bool isNextCameraIdleFromSearch = false;
+
   Future<void> getPlaceDetails({
     required String placeId,
+    String? fallbackTitle,
     bool internal = false,
     bool isStart = false,
   }) async {
+    predictions = [];
+    isLoadingPredictions = false;
+    if (fallbackTitle != null && fallbackTitle.trim().isNotEmpty) {
+      searchController.text = fallbackTitle.trim();
+    }
+    emit(ClearState());
+
     final result = await googleMapRepoImpl.getPlaceDetails(
         placeId: placeId, sessionToken: sessionToken);
+    sessionToken = null;
     result.fold((l) {
       emit(GetPlaceDetailsErrorState(errorMessage: l.message));
     }, (r) async {
+      final targetLatLng = LatLng(
+        r.result!.geometry!.location!.lat!,
+        r.result!.geometry!.location!.lng!,
+      );
       if (isStart && !internal) {
-        _onSearchAdd(r);
+        _onSearchAdd(r, fallbackTitle: fallbackTitle);
         emit(GetPlaceDetailsSuccessState());
         return;
       }
       if (internal) {
-        if (regionModel == null) {
-          emit(GetPlaceDetailsErrorState(
-              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
-          return;
+        if (regionModel != null) {
+          bool inside = chackInternalOrNot(targetLatLng);
+          if (!inside) {
+            emit(GetPlaceDetailsErrorState(
+                errorMessage:
+                    'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية'));
+            return;
+          }
         }
-
-        bool inside = chackInternalOrNot(LatLng(
-            r.result!.geometry!.location!.lat!,
-            r.result!.geometry!.location!.lng!));
-        if (inside) {
-          _onSearchAdd(r);
-        } else {
-          emit(GetPlaceDetailsErrorState(
-              errorMessage:
-                  'يرجى اختيار موقع داخل الحدود المحددة، حيث أن هذه رحلة داخلية'));
-          return;
-        }
+        _onSearchAdd(r, fallbackTitle: fallbackTitle);
       } else {
-        if (regionModel == null) {
-          emit(GetPlaceDetailsErrorState(
-              errorMessage: 'الرجاء الانتظار لتحميل بيانات المنطقة'));
-          return;
+        if (regionModel != null) {
+          bool inside = chackInternalOrNot(targetLatLng);
+          if (inside) {
+            emit(GetPlaceDetailsErrorState(
+                errorMessage:
+                    'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
+            return;
+          }
         }
-
-        bool inside = chackInternalOrNot(LatLng(
-            r.result!.geometry!.location!.lat!,
-            r.result!.geometry!.location!.lng!));
-        if (inside) {
-          emit(GetPlaceDetailsErrorState(
-              errorMessage:
-                  'يرجى اختيار موقع خارج الحدود المحددة، حيث أن هذه رحلة خارجية'));
-          return;
-        } else {
-          _onSearchAdd(r);
-        }
+        _onSearchAdd(r, fallbackTitle: fallbackTitle);
       }
       emit(GetPlaceDetailsSuccessState());
     });
@@ -466,11 +681,32 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     }
   }
 
-  void _onSearchAdd(PlaceDetailsModel r) async {
+  void _onSearchAdd(PlaceDetailsModel r, {String? fallbackTitle}) async {
     placeDetailsLocation = LatLng(
         r.result!.geometry!.location!.lat!, r.result!.geometry!.location!.lng!);
 
-    final title = r.result?.name ?? r.result?.formattedAddress;
+    final title = (r.result?.name?.trim().isNotEmpty == true
+            ? r.result!.name!.trim()
+            : null) ??
+        (r.result?.formattedAddress?.trim().isNotEmpty == true
+            ? r.result!.formattedAddress!.trim()
+            : null) ??
+        fallbackTitle?.trim();
+
+    _placeNameTimer?.cancel();
+    _placeNameCancelToken?.cancel();
+    _placeNameToken++;
+    selectedLocation = placeDetailsLocation;
+    isInIraq = true;
+    isResolvingPlaceName = false;
+    if (title != null && title.isNotEmpty) {
+      locationName = title;
+      searchController.text = title;
+      final cell =
+          '${placeDetailsLocation.latitude.toStringAsFixed(4)},${placeDetailsLocation.longitude.toStringAsFixed(4)}';
+      _placeNameCache[cell] = (name: title, countryCode: 'IQ');
+    }
+
     markers.removeWhere((marker) => marker.markerId.value == 'searchedPlace');
     if (title != null && title.isNotEmpty) {
       markers.add(
@@ -483,13 +719,15 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       );
     }
 
+    isNextCameraIdleFromSearch = true;
     // Not awaited: on web the animation future can stall and block the zoom.
     googleMapController?.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(target: placeDetailsLocation, zoom: 16),
       ),
     );
-    clear(); // also emits, rebuilding the map with the new marker
+    clear(keepText: true); // also emits, rebuilding the map with the new marker
+    emit(SelectedLocationNameState());
     if (title != null && title.isNotEmpty) {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       try {
@@ -502,58 +740,84 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   }
 
   RegionModel? regionModel;
+  static RegionModel? _cachedRegionModel;
+  static LatLng? _cachedRegionLocation;
   Set<Polygon> polygon = {};
   //? get governorates
   MapState mapState = MapState.initial;
+
+  void _applyRegionPolygon(
+    RegionModel r, {
+    required bool internal,
+    required bool isStart,
+  }) {
+    regionModel = r;
+    polygon.clear();
+    if (internal) {
+      final Polygon poly = Polygon(
+        polygonId: PolygonId('${r.polygonId}_inverse'),
+        points: const // Outer boundary covering Iraq region
+            [
+          LatLng(37.5, 38.5), // Top-left (Northwest)
+          LatLng(37.5, 48.6), // Top-right (Northeast)
+          LatLng(29.0, 48.6), // Bottom-right (Southeast)
+          LatLng(29.0, 38.5), // Bottom-left (Southwest)
+          LatLng(37.5, 38.5) // Close the polygon
+        ],
+        holes: [
+          r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
+        ],
+        strokeWidth: 2,
+        strokeColor: Colors.red,
+        fillColor: Colors.red.withValues(alpha: 0.15), // Outside red
+      );
+      polygon.add(poly);
+    } else {
+      if (!isStart) {
+        final Polygon poly = Polygon(
+          polygonId: PolygonId(r.polygonId),
+          points:
+              r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
+          strokeWidth: 2,
+          strokeColor: Colors.red,
+          fillColor: Colors.red.withValues(alpha: 0.15),
+        );
+        polygon.add(poly);
+      }
+    }
+  }
+
   Future<void> getGovernorates({
     required bool internal,
     bool isStart = false,
     LatLng? startLocation,
   }) async {
-    mapState = MapState.loading;
+    final target = startLocation ?? currentLocation;
+    if (_cachedRegionModel != null && _cachedRegionLocation != null) {
+      final dLat = (target.latitude - _cachedRegionLocation!.latitude).abs();
+      final dLng = (target.longitude - _cachedRegionLocation!.longitude).abs();
+      if (dLat < 0.05 && dLng < 0.05) {
+        _applyRegionPolygon(
+          _cachedRegionModel!,
+          internal: internal,
+          isStart: isStart,
+        );
+        emit(GetGovernoratesSuccessState());
+        return;
+      }
+    }
+
     emit(GetGovernoratesLoadingState());
     final result = await googleMapRepoImpl.getGovernorate(
-      currentLocation: startLocation ?? currentLocation,
+      currentLocation: target,
     );
     result.fold((l) {
-      mapState = MapState.error;
       emit(GetGovernoratesErrorState(errorMessage: l.message));
     }, (r) {
-      regionModel = r;
-      if (internal) {
-        final Polygon polygon = Polygon(
-          polygonId: PolygonId('${r.polygonId}_inverse'),
-          points: const // Outer boundary covering Iraq region
-              [
-            LatLng(37.5, 38.5), // Top-left (Northwest)
-            LatLng(37.5, 48.6), // Top-right (Northeast)
-            LatLng(29.0, 48.6), // Bottom-right (Southeast)
-            LatLng(29.0, 38.5), // Bottom-left (Southwest)
-            LatLng(37.5, 38.5) // Close the polygon
-          ],
-          holes: [
-            r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
-          ],
-          strokeWidth: 2,
-          strokeColor: Colors.red,
-          fillColor: Colors.red.withValues(alpha: 0.15), // Outside red
-        );
-        this.polygon.add(polygon);
-      } else {
-        if (!isStart) {
-          final Polygon polygon = Polygon(
-            polygonId: PolygonId(r.polygonId),
-            points:
-                r.geometry.coordinates[0].map((e) => LatLng(e[1], e[0])).toList(),
-            strokeWidth: 2,
-            strokeColor: Colors.red,
-            fillColor: Colors.red.withValues(alpha: 0.15),
-          );
-          this.polygon.add(polygon);
-        }
-      }
+      _cachedRegionModel = r;
+      _cachedRegionLocation = target;
+      _applyRegionPolygon(r, internal: internal, isStart: isStart);
       emit(GetGovernoratesSuccessState());
-      mapState = MapState.loaded;
     });
   }
 }

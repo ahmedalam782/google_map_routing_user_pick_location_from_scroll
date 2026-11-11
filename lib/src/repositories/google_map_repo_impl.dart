@@ -19,16 +19,25 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
   final String apiKey = MdUserPickLocationGoogleMapConfig.apiKey;
 
   @override
-  Future<Either<Failure, PlacesModel>> getPredictions(
-      {required String input, required String sessionToken}) async {
+  Future<Either<Failure, PlacesModel>> getPredictions({
+    required String input,
+    required String sessionToken,
+    LatLng? locationBias,
+    CancelToken? cancelToken,
+  }) async {
     try {
       final response = await dioClient.get(
         '${EndPoints.placesBaseUrl}autocomplete/json',
+        cancelToken: cancelToken,
         queryParameters: {
           'input': input,
           'sessiontoken': sessionToken,
           'language': 'ar',
           'components': 'country:iq',
+          if (locationBias != null) ...{
+            'location': '${locationBias.latitude},${locationBias.longitude}',
+            'radius': 50000,
+          },
           'key': apiKey,
         },
       );
@@ -39,6 +48,9 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
         return Left(ServerFailure('حدث خطأ، يرجى المحاولة مرة أخرى'));
       }
     } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        return Left(ServerFailure('cancelled'));
+      }
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
       return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
@@ -49,10 +61,12 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
   Future<Either<Failure, PlaceDetailsModel>> getPlaceDetails({
     required String placeId,
     String? sessionToken,
+    CancelToken? cancelToken,
   }) async {
     try {
       final response = await dioClient.get(
         '${EndPoints.placesBaseUrl}details/json',
+        cancelToken: cancelToken,
         queryParameters: {
           'place_id': placeId,
           if (sessionToken != null) 'sessiontoken': sessionToken,
@@ -67,6 +81,9 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
         return Left(ServerFailure('حدث خطأ، يرجى المحاولة مرة أخرى'));
       }
     } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        return Left(ServerFailure('cancelled'));
+      }
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
       return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
@@ -77,11 +94,13 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
   Future<Either<Failure, PlaceNameResult>> getPlaceName({
     required double lat,
     required double lng,
+    CancelToken? cancelToken,
   }) async {
     try {
-      final nearby = _nearbyPlace(lat, lng); // starts now, awaited below
+      final nearbyFuture = _nearbyPlace(lat, lng, cancelToken: cancelToken);
       final response = await dioClient.get(
         '${EndPoints.mapsBaseUrl}geocode/json',
+        cancelToken: cancelToken,
         queryParameters: {
           'latlng': '$lat,$lng',
           'region': 'iq',
@@ -93,10 +112,20 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       if (data is! Map<String, dynamic> || data['status'] != 'OK') {
         return Left(ServerFailure('تعذر تحديد اسم الموقع'));
       }
-      final line = geocodeAddressLine(data, nearby: await nearby).trim();
+      String? nearby;
+      try {
+        nearby = await nearbyFuture.timeout(
+          const Duration(milliseconds: 220),
+          onTimeout: () => null,
+        );
+      } catch (_) {}
+      final line = geocodeAddressLine(data, nearby: nearby).trim();
       if (line.isEmpty) return Left(ServerFailure('تعذر تحديد اسم الموقع'));
       return Right((name: line, countryCode: _countryCode(data)));
     } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        return Left(ServerFailure('cancelled'));
+      }
       return Left(ServerFailure.fromDioError(e));
     } catch (e) {
       return Left(ServerFailure('حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى'));
@@ -105,7 +134,8 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
 
   static String? _countryCode(Map<String, dynamic> data) {
     for (final result in (data['results'] as List?) ?? const []) {
-      for (final c in ((result as Map)['address_components'] as List?) ?? const []) {
+      for (final c
+          in ((result as Map)['address_components'] as List?) ?? const []) {
         final types = List<String>.from((c as Map)['types'] ?? const []);
         if (types.contains('country')) return c['short_name']?.toString();
       }
@@ -114,10 +144,15 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
   }
 
   /// Optional "near" landmark; any failure just means no `قرب …` part.
-  Future<String?> _nearbyPlace(double lat, double lng) async {
+  Future<String?> _nearbyPlace(
+    double lat,
+    double lng, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       final response = await dioClient.get(
         '${EndPoints.placesBaseUrl}nearbysearch/json',
+        cancelToken: cancelToken,
         queryParameters: {
           'location': '$lat,$lng',
           'radius': 80,

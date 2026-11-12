@@ -33,7 +33,8 @@ String geocodeAddressLine(Map<String, dynamic> body, {String? nearby}) {
       : wider.key == 'locality'
           ? [best.value, wider.value]
           : [wider.value, best.value];
-  return [...areas, if (nearPart != null) nearPart].join('، ');
+  final includeNear = nearPart != null && !areas.contains(near);
+  return [...areas, if (includeNear) nearPart].join('، ');
 }
 
 const String _unnamed = 'موقع على الخريطة';

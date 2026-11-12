@@ -33,7 +33,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
 
   Set<Marker> markers = {};
   Set<Polyline> polyLines = {};
-  late LatLng currentLocation;
+  LatLng currentLocation = const LatLng(33.3152, 44.3661);
   LatLng? currentLocationLatLang;
   LatLng? carLocation;
 
@@ -56,6 +56,10 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   }
 
   static LatLng? _lastKnownLocation;
+
+  static void seedLastKnownLocation(LatLng location) {
+    _lastKnownLocation = location;
+  }
 
 //? getLocation
   Future<void> getLocationMyCurrentLocation(
@@ -345,14 +349,16 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Future<PlaceNameResult> _placeName(
     double lat,
     double lng, {
+    String? preferredNearby,
     CancelToken? cancelToken,
   }) async {
     final cell = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
     final cached = _placeNameCache[cell];
-    if (cached != null) return cached;
+    if (cached != null && preferredNearby == null) return cached;
     final result = await googleMapRepoImpl.getPlaceName(
       lat: lat,
       lng: lng,
+      preferredNearby: preferredNearby,
       cancelToken: cancelToken,
     );
     final found = result.fold<PlaceNameResult?>((_) => null, (r) => r);
@@ -378,6 +384,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
   Future<void> selectedPlaceName(
     LatLng latLng, {
     Duration debounce = const Duration(milliseconds: 120),
+    String? preferredNearby,
   }) {
     final token = ++_placeNameToken;
     selectedLocation = latLng;
@@ -394,7 +401,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     final cell =
         '${latLng.latitude.toStringAsFixed(4)},${latLng.longitude.toStringAsFixed(4)}';
     final cached = _placeNameCache[cell];
-    if (cached != null) {
+    if (cached != null && preferredNearby == null) {
       locationName = cached.name;
       isInIraq = cached.countryCode == null
           ? isPointInIraqSync(latLng)
@@ -420,6 +427,7 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
         final place = await _placeName(
           latLng.latitude,
           latLng.longitude,
+          preferredNearby: preferredNearby,
           cancelToken: cancelToken,
         );
         if (token != _placeNameToken || isClosed) return;
@@ -467,6 +475,12 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     final loc = selectedLocation;
     if (loc == null) return;
     isInIraq ??= isPointInIraqSync(loc);
+    if (isResolvingPlaceName &&
+        _placeNameDone != null &&
+        !_placeNameDone!.isCompleted) {
+      await _placeNameDone!.future;
+      return;
+    }
     if (!isResolvingPlaceName &&
         locationName != null &&
         locationName!.trim().isNotEmpty) {
@@ -693,18 +707,12 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
             : null) ??
         fallbackTitle?.trim();
 
-    _placeNameTimer?.cancel();
-    _placeNameCancelToken?.cancel();
-    _placeNameToken++;
     selectedLocation = placeDetailsLocation;
     isInIraq = true;
-    isResolvingPlaceName = false;
+    searchFocusNode.unfocus();
     if (title != null && title.isNotEmpty) {
       locationName = title;
       searchController.text = title;
-      final cell =
-          '${placeDetailsLocation.latitude.toStringAsFixed(4)},${placeDetailsLocation.longitude.toStringAsFixed(4)}';
-      _placeNameCache[cell] = (name: title, countryCode: 'IQ');
     }
 
     markers.removeWhere((marker) => marker.markerId.value == 'searchedPlace');
@@ -727,7 +735,14 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
       ),
     );
     clear(keepText: true); // also emits, rebuilding the map with the new marker
-    emit(SelectedLocationNameState());
+    // Resolve the full formatted address ("حي ...، قرب ...") for the searched point.
+    unawaited(
+      selectedPlaceName(
+        placeDetailsLocation,
+        debounce: Duration.zero,
+        preferredNearby: r.result?.name?.trim(),
+      ),
+    );
     if (title != null && title.isNotEmpty) {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       try {

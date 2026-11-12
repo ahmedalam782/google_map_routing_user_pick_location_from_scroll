@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,15 +8,24 @@ import 'dart:math';
 class LocationService {
   final Location _location = Location();
   StreamSubscription<LocationData>? _locationSubscription;
+  static bool _accessGranted = false;
+  static bool _settingsConfigured = false;
+  static Future<LocationData>? _inFlight;
+
+  static const Duration _timeout = Duration(seconds: 6);
 
   Future<void> _configureSettings() async {
+    if (_settingsConfigured) return;
+    _settingsConfigured = true;
     await _location.changeSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 2,
+      interval: 1000,
+      distanceFilter: 0,
     );
   }
 
   Future<void> checkAndRequestLocationService() async {
+    if (_accessGranted) return;
     try {
       bool isServiceEnabled = await _location.serviceEnabled();
       if (!isServiceEnabled) {
@@ -32,6 +41,7 @@ class LocationService {
   }
 
   Future<void> checkAndRequestLocationPermission() async {
+    if (_accessGranted) return;
     try {
       var permission = await _location.hasPermission();
       if (permission == PermissionStatus.deniedForever) {
@@ -44,6 +54,7 @@ class LocationService {
           throw LocationPermissionException();
         }
       }
+      _accessGranted = true;
     } on PlatformException catch (e) {
       debugPrint("Permission check failed: ${e.message}");
       throw LocationPermissionException();
@@ -64,13 +75,30 @@ class LocationService {
   }
 
   Future<LocationData> getLocation() async {
+    if (_inFlight != null) return _inFlight!;
+    final future = _getLocationInternal();
+    _inFlight = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_inFlight, future)) {
+        _inFlight = null;
+      }
+    }
+  }
+
+  Future<LocationData> _getLocationInternal() async {
     try {
       await checkAndRequestLocationService();
       await checkAndRequestLocationPermission();
-      await _configureSettings();
-      return await _location.getLocation();
+      await _configureSettings().catchError((_) {});
+      return await _location.getLocation().timeout(_timeout);
     } on PlatformException catch (e) {
+      _accessGranted = false;
       debugPrint("Get location failed: ${e.message}");
+      rethrow;
+    } catch (_) {
+      _accessGranted = false;
       rethrow;
     }
   }

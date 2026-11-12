@@ -208,9 +208,7 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                           if (cubit.isResolvingPlaceName ||
                               (cubit.locationName == null ||
                                   cubit.locationName!.trim().isEmpty)) {
-                            await cubit
-                                .ensurePlaceResolved()
-                                .timeout(
+                            await cubit.ensurePlaceResolved().timeout(
                                   const Duration(milliseconds: 900),
                                   onTimeout: () {},
                                 );
@@ -220,10 +218,10 @@ class MdSoftGoogleMapUserPickLocationFromScroll extends StatelessWidget {
                               (cubit.locationName?.trim().isNotEmpty == true)
                                   ? cubit.locationName!.trim()
                                   : (cubit.searchController.text
-                                              .trim()
-                                              .isNotEmpty
-                                          ? cubit.searchController.text.trim()
-                                          : 'موقع على الخريطة');
+                                          .trim()
+                                          .isNotEmpty
+                                      ? cubit.searchController.text.trim()
+                                      : 'موقع على الخريطة');
                           selectedPlace.call(MdOnUserSelectedPlace(
                             selectedLocation: finalLoc,
                             pointName: finalName,
@@ -334,13 +332,18 @@ class SearchTextFormFeild extends StatelessWidget {
           valueListenable: cubit.searchController,
           builder: (context, value, _) {
             final hasText = value.text.isNotEmpty;
+            final isResolving = cubit.isResolvingPlaceName &&
+                !cubit.searchFocusNode.hasFocus &&
+                !hasText;
             return SizedBox(
               width: double.infinity,
               child: CustomTextFormFeild(
                 focusNode: cubit.searchFocusNode,
                 controller: cubit.searchController,
                 haveShadow: true,
-                label: 'الى اين تود الذهاب؟...',
+                label: isResolving
+                    ? 'جاري تحديد العنوان ...'
+                    : 'الى اين تود الذهاب؟...',
                 onTap: () {
                   if (cubit.searchController.text.isNotEmpty &&
                       cubit.searchController.text == cubit.locationName) {
@@ -351,12 +354,21 @@ class SearchTextFormFeild extends StatelessWidget {
                   }
                 },
                 onChange: (val) => cubit.onSearchChanged(val),
-                prefixIcon: SvgPicture.asset(
-                  AppImages.search,
-                  height: 20,
-                  width: 20,
-                  fit: BoxFit.scaleDown,
-                ),
+                prefixIcon: isResolving
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : SvgPicture.asset(
+                        AppImages.search,
+                        height: 20,
+                        width: 20,
+                        fit: BoxFit.scaleDown,
+                      ),
                 suffixIconButton: hasText
                     ? IconButton(
                         icon: const Icon(
@@ -446,20 +458,19 @@ class PlacesListWidget extends StatelessWidget {
                     fontFamily: MdUserPickLocationGoogleMapConfig.fontFamily,
                   ),
                 ),
-                subtitle:
-                    (secondaryText != null && secondaryText.isNotEmpty)
-                        ? Text(
-                            secondaryText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: const Color(0xff606060),
-                              fontFamily:
-                                  MdUserPickLocationGoogleMapConfig.fontFamily,
-                            ),
-                          )
-                        : null,
+                subtitle: (secondaryText != null && secondaryText.isNotEmpty)
+                    ? Text(
+                        secondaryText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: const Color(0xff606060),
+                          fontFamily:
+                              MdUserPickLocationGoogleMapConfig.fontFamily,
+                        ),
+                      )
+                    : null,
                 trailing: SvgPicture.asset(
                   AppImages.frame,
                   height: 20,
@@ -535,8 +546,9 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
         if (!_hasMovedCamera && widget.cubit.selectedLocation == null) {
           return;
         }
-        final target =
-            _hasMovedCamera ? location : (widget.cubit.selectedLocation ?? location);
+        final target = _hasMovedCamera
+            ? location
+            : (widget.cubit.selectedLocation ?? location);
         widget.cubit.selectedLocation = target;
         widget.cubit.isInIraq = widget.cubit.isPointInIraqSync(target);
 

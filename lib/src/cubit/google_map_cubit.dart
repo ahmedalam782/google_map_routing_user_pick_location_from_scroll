@@ -410,6 +410,9 @@ class GoogleMapCubit extends Cubit<GoogleMapState> {
     }
 
     isResolvingPlaceName = true;
+    // Drop the previous address so the field shows the loading title instead
+    // of a stale name while the new one is looked up.
+    if (!searchFocusNode.hasFocus) searchController.clear();
     emit(ResolvingLocationNameState());
 
     Future<void> runLookup() async {

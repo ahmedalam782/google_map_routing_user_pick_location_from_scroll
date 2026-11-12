@@ -24,6 +24,7 @@ abstract class GoogleMapRepo {
   Future<Either<Failure, PlaceNameResult>> getPlaceName({
     required double lat,
     required double lng,
+    String? preferredNearby,
     CancelToken? cancelToken,
   });
   Future<Either<Failure, RegionModel>> getGovernorate({

@@ -597,30 +597,34 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
       onMapCreated: (GoogleMapController controller) async {
         widget.cubit.googleMapController = controller;
         if (widget.mapStyle != null) {
-          widget.cubit.getMapStyle(mapStyle: widget.mapStyle!);
+          unawaited(widget.cubit.getMapStyle(mapStyle: widget.mapStyle!));
         }
 
-        await Future.wait([
-          widget.cubit.getLocationMyCurrentLocation(
-            startLocation: widget.startLocation,
-            isStart: widget.isStart,
-            internal: widget.internal,
-            oldLocation: widget.oldLocation,
-          ),
-          if (widget.cubit.regionModel == null &&
-              (widget.startLocation != null || widget.oldLocation != null))
+        if (widget.cubit.regionModel == null &&
+            (widget.startLocation != null || widget.oldLocation != null)) {
+          unawaited(
             widget.cubit.getGovernorates(
               startLocation: widget.startLocation ?? widget.oldLocation,
               internal: widget.internal,
               isStart: widget.isStart,
             ),
-        ]);
+          );
+        }
+
+        await widget.cubit.getLocationMyCurrentLocation(
+          startLocation: widget.startLocation,
+          isStart: widget.isStart,
+          internal: widget.internal,
+          oldLocation: widget.oldLocation,
+        );
 
         if (widget.cubit.regionModel == null) {
-          await widget.cubit.getGovernorates(
-            startLocation: widget.startLocation,
-            internal: widget.internal,
-            isStart: widget.isStart,
+          unawaited(
+            widget.cubit.getGovernorates(
+              startLocation: widget.startLocation,
+              internal: widget.internal,
+              isStart: widget.isStart,
+            ),
           );
         }
       },

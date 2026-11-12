@@ -94,10 +94,16 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
   Future<Either<Failure, PlaceNameResult>> getPlaceName({
     required double lat,
     required double lng,
+    String? preferredNearby,
     CancelToken? cancelToken,
   }) async {
     try {
-      final nearbyFuture = _nearbyPlace(lat, lng, cancelToken: cancelToken);
+      final cleanPreferred = preferredNearby?.trim();
+      final hasPreferred =
+          cleanPreferred != null && cleanPreferred.isNotEmpty;
+      final nearbyFuture = hasPreferred
+          ? Future<String?>.value(cleanPreferred)
+          : _nearbyPlace(lat, lng, cancelToken: cancelToken);
       final response = await dioClient.get(
         '${EndPoints.mapsBaseUrl}geocode/json',
         cancelToken: cancelToken,
@@ -115,7 +121,7 @@ class GoogleMapRepoImpl extends GoogleMapRepo {
       String? nearby;
       try {
         nearby = await nearbyFuture.timeout(
-          const Duration(milliseconds: 220),
+          const Duration(milliseconds: 800),
           onTimeout: () => null,
         );
       } catch (_) {}
